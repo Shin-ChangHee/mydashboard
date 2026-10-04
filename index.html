@@ -12,13 +12,15 @@
       <body>   : 화면 뼈대(HTML)  [A] 상단 바 / [B] 타임라인 / [C] 마감
                  / [D] 오늘 할 일 / [E] 과제 / [F] 바로가기, 그리고 입력 창들
       <script> : 동작(JavaScript)
-                 1 도우미 → 2 샘플 데이터 → 3 저장 → 4~13 영역별 기능 → 14 시계
+                 1 도우미 → 2 샘플 데이터 → 3 저장 → 4~13 영역별 기능
+                 → 14 구글 캘린더 연동 → 15 시계
 
     고쳐 보기 팁
       - 색: 맨 위 :root 의 --bg, --scoreboard 같은 값을 바꾸면 전체에 반영
       - 타임라인 1시간 높이: --hour-h (큰 화면에서는 자동으로 맞춰짐)
       - 데이터는 브라우저 localStorage 의 "commandCenter.data" 에 저장
       - 외부 서버·CDN·외부 폰트를 쓰지 않음 (인터넷 없이 동작)
+        단, 설정에서 "구글 캘린더 연동"을 켠 경우에만 구글 서버와 통신 (GOOGLE_SETUP.md 참고)
     ============================================================
   -->
   <meta charset="UTF-8">
@@ -492,6 +494,87 @@
       height: 10px;
       border-radius: 50%;
       background: var(--scoreboard);
+    }
+
+    /* ---------- 구글 캘린더 일정 ---------- */
+    /* 구글 일정 블록 오른쪽 위에 작은 G 표시 */
+    .tl-event.is-google .tl-event-title { padding-right: 12px; }
+    .tl-event.is-google::after {
+      content: "G";
+      position: absolute;
+      top: 3px;
+      right: 5px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-on-event);
+    }
+    /* 종일 일정 줄 (요일 머리글 바로 아래) */
+    .tl-allday-label {
+      font-size: 12px;
+      color: var(--text-sub);
+      padding: 4px 8px 4px 0;
+      text-align: right;
+      border-bottom: 1px solid var(--line);
+    }
+    .tl-allday {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      padding: 4px;
+      min-width: 0;
+      border-left: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .tl-allday.is-today { background: var(--today); }
+    .tl-chip {
+      font: inherit;
+      font-size: 12px;
+      text-align: left;
+      color: var(--text);
+      background: var(--cat-bg);
+      border: 0;
+      border-left: 3px solid var(--cat-color);
+      border-radius: 0 3px 3px 0;
+      padding: 2px 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+    }
+    .tl-chip:hover { filter: brightness(1.15); }
+
+    /* 타임라인 머리글의 구글 버튼·상태 */
+    .g-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .g-status {
+      font-size: 12px;
+      color: var(--text-sub);
+    }
+    .g-status.is-error { color: var(--warn); }
+
+    /* 구글 일정 자세히 창 */
+    .g-detail {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 14px;
+    }
+    .g-detail div { display: flex; gap: 12px; }
+    .g-detail dt { width: 48px; flex-shrink: 0; color: var(--text-sub); }
+    .g-detail dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+    .dialog-form p.field-label { margin: 0; }
+
+    /* 설정 창: 체크박스 + 글자 한 줄 */
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
     }
 
     /* 이번 주에 일정이 하나도 없을 때 안내 문구 */
@@ -1101,6 +1184,11 @@
             <button type="button" class="btn" id="tlNext">다음 주 ▶</button>
           </div>
           <button type="button" class="btn" id="tlAdd">일정 추가</button>
+          <!-- 구글 캘린더 연동 (설정에서 켰을 때만 보임) -->
+          <span class="g-controls">
+            <button type="button" class="btn" id="gBtn" hidden>구글 캘린더 연결</button>
+            <span class="g-status" id="gStatus" role="status" hidden></span>
+          </span>
         </div>
       </div>
       <!-- 일정이 없을 때만 보이는 안내 문구 -->
@@ -1383,6 +1471,24 @@
         </div>
       </section>
 
+      <section class="settings-section" aria-labelledby="stGoogleTitle">
+        <h3 id="stGoogleTitle">구글 캘린더 연동 (인터넷 PC 전용)</h3>
+        <p class="form-hint">켜면 구글 캘린더 일정을 타임라인에 함께 보여줘요. 읽기만 하고, 브라우저에 저장하지 않아요.
+          웹 주소(https://…)로 열었을 때만 동작해요. 준비 방법은 저장소의 GOOGLE_SETUP.md를 보세요.</p>
+        <label class="check-row">
+          <input type="checkbox" class="check" id="stGoogleOn">
+          <span>구글 캘린더 연동 사용</span>
+        </label>
+        <label class="field">
+          <span class="field-label">OAuth 클라이언트 ID</span>
+          <input class="input" type="text" id="stGoogleClient" autocomplete="off" spellcheck="false"
+                 placeholder="123456789-abc….apps.googleusercontent.com">
+        </label>
+        <div>
+          <button type="button" class="btn btn-small" id="stGoogleDisconnect" hidden>구글 연결 끊기</button>
+        </div>
+      </section>
+
       <section class="settings-section" aria-labelledby="stSampleTitle">
         <h3 id="stSampleTitle">샘플 데이터</h3>
         <p class="form-hint">처음에 넣어 둔 예시 일정·과제·마감·바로가기를 지워요. 직접 고친 항목은 남겨 둬요.</p>
@@ -1403,6 +1509,7 @@
       <p class="privacy-note">
         대시보드에는 일정 제목과 링크 정도만 넣어 주세요. 개인정보나 내부 문서 내용은 넣지 않는 것을 전제로 만들었어요.
         모든 데이터는 이 브라우저 안에만 저장되고, 외부 서버로 보내지 않아요.
+        (구글 연동을 켜면 구글에서 일정을 읽어 오기만 하고, 대시보드 데이터를 구글로 보내지는 않아요.)
       </p>
     </form>
   </dialog>
@@ -1436,6 +1543,26 @@
       <div class="dialog-actions">
         <span class="spacer"></span>
         <button type="button" class="btn" id="bkClose">닫기</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ===================================================
+       구글 일정 자세히 보기 (읽기 전용)
+       =================================================== -->
+  <dialog class="dialog" id="googleEventDialog" aria-labelledby="gdTitle">
+    <div class="dialog-form">
+      <p class="field-label">구글 캘린더 일정 · 고치려면 구글 캘린더에서 고쳐 주세요</p>
+      <h2 id="gdTitle"></h2>
+      <dl class="g-detail">
+        <div><dt>시간</dt><dd class="num" id="gdWhen"></dd></div>
+        <div><dt>캘린더</dt><dd id="gdCalendar"></dd></div>
+        <div id="gdLocationRow"><dt>장소</dt><dd id="gdLocation"></dd></div>
+      </dl>
+      <div class="dialog-actions">
+        <a class="btn link-btn" id="gdLink" target="_blank" rel="noopener noreferrer">구글 캘린더에서 열기</a>
+        <span class="spacer"></span>
+        <button type="button" class="btn" id="gdClose">닫기</button>
       </div>
     </div>
   </dialog>
@@ -1529,7 +1656,9 @@
           workStart: "08:00",      // 출근 시각
           workEnd: "17:00",        // 퇴근 시각
           timelineStart: "08:00",  // 타임라인 맨 위 시각
-          timelineEnd: "19:00"     // 타임라인 맨 아래 시각
+          timelineEnd: "19:00",    // 타임라인 맨 아래 시각
+          googleEnabled: false,    // 구글 캘린더 연동 사용 여부 (인터넷 PC 전용)
+          googleClientId: ""       // 구글 OAuth 클라이언트 ID (비밀번호가 아니라 공개돼도 되는 값)
         },
         categories: [
           { id: "meeting",  name: "회의",          color: "#6FA8DC" },
@@ -1619,7 +1748,12 @@
 
       return {
         version: CURRENT_VERSION,
-        settings: { ...base.settings, ...(raw.settings || {}) },
+        settings: (() => {
+          const st = { ...base.settings, ...(raw.settings || {}) };
+          st.googleEnabled = st.googleEnabled === true;
+          st.googleClientId = typeof st.googleClientId === "string" ? st.googleClientId : "";
+          return st;
+        })(),
         categories: (() => {
           const list = (Array.isArray(raw.categories) ? raw.categories : [])
             .filter(c => c && typeof c.id === "string" && typeof c.name === "string" && /^#[0-9a-f]{6}$/i.test(c.color))
@@ -1842,7 +1976,21 @@
       bkPreview: document.getElementById("bkPreview"),
       bkError: document.getElementById("bkError"),
       bkApply: document.getElementById("bkApply"),
-      bkClose: document.getElementById("bkClose")
+      bkClose: document.getElementById("bkClose"),
+      // 구글 캘린더 연동
+      gBtn: document.getElementById("gBtn"),
+      gStatus: document.getElementById("gStatus"),
+      stGoogleOn: document.getElementById("stGoogleOn"),
+      stGoogleClient: document.getElementById("stGoogleClient"),
+      stGoogleDisconnect: document.getElementById("stGoogleDisconnect"),
+      gdDialog: document.getElementById("googleEventDialog"),
+      gdTitle: document.getElementById("gdTitle"),
+      gdWhen: document.getElementById("gdWhen"),
+      gdCalendar: document.getElementById("gdCalendar"),
+      gdLocation: document.getElementById("gdLocation"),
+      gdLocationRow: document.getElementById("gdLocationRow"),
+      gdLink: document.getElementById("gdLink"),
+      gdClose: document.getElementById("gdClose")
     };
 
     // 입력 창 바깥(어두운 부분)을 누르면 닫히게 하기
@@ -2008,7 +2156,10 @@
 
     // 일정 블록 하나 만들기
     function createEventBlock(item, tlStart, hourPx, date) {
-      const category = findCategory(item.event.categoryId);
+      // 구글 일정이면 그 캘린더 이름·색을 카테고리처럼 사용
+      const category = item.google
+        ? { name: item.google.calendarName, color: item.google.color }
+        : findCategory(item.event.categoryId);
       // 누르면 수정 창이 열리도록 버튼으로 만듦 (키보드 Tab으로도 이동 가능)
       const block = document.createElement("button");
       block.type = "button";
@@ -2047,6 +2198,16 @@
       const repeatText = item.event.repeatDays.length ? ", 매주 반복" : "";
       block.setAttribute("aria-label",
         `${DAY_NAMES[date.getDay()]}요일 ${timeText} ${item.event.title}, ${category.name}${repeatText}. 누르면 수정`);
+
+      if (item.google) {
+        // 구글 일정: 수정 대신 자세히 보기 (읽기 전용)
+        block.classList.add("is-google");
+        block.title = `${item.event.title}\n${timeText} · ${category.name} (구글)`;
+        block.setAttribute("aria-label",
+          `${DAY_NAMES[date.getDay()]}요일 ${timeText} ${item.event.title}, 구글 캘린더 ${category.name}. 누르면 자세히`);
+        block.addEventListener("click", () => openGoogleEventDialog(item.google));
+        return block;
+      }
 
       block.addEventListener("click", () => openEventDialog({ event: item.event }));
       return block;
@@ -2092,6 +2253,34 @@
         grid.append(head);
       });
 
+      // ── 구글 종일 일정 줄 (있을 때만) ──
+      const allDayByDay = days.map(date => googleAllDayFor(date));
+      const hasAllDay = allDayByDay.some(list => list.length > 0);
+      if (hasAllDay) {
+        const label = document.createElement("div");
+        label.className = "tl-allday-label";
+        label.textContent = "종일";
+        grid.append(label);
+        days.forEach((date, i) => {
+          const cell = document.createElement("div");
+          cell.className = "tl-allday";
+          if (toDateKey(date) === todayKey) cell.classList.add("is-today");
+          allDayByDay[i].forEach(g => {
+            const chip = document.createElement("button");
+            chip.type = "button";
+            chip.className = "tl-chip";
+            chip.textContent = g.title;
+            chip.title = `${g.title} · ${g.calendarName} (구글)`;
+            chip.setAttribute("aria-label", `${DAY_NAMES[date.getDay()]}요일 종일 ${g.title}, 구글 캘린더 일정. 누르면 자세히`);
+            chip.style.setProperty("--cat-color", g.color);
+            chip.style.setProperty("--cat-bg", hexToRgba(g.color, 0.2));
+            chip.addEventListener("click", () => openGoogleEventDialog(g));
+            cell.append(chip);
+          });
+          grid.append(cell);
+        });
+      }
+
       // ── 왼쪽 시간 눈금 ──
       const hours = document.createElement("div");
       hours.className = "tl-hours";
@@ -2133,7 +2322,8 @@
             startMin: Math.max(timeToMinutes(event.start), tlStart),
             endMin: Math.min(timeToMinutes(event.end), tlEnd)
           }))
-          .filter(item => item.endMin > item.startMin);  // 범위 밖 일정은 제외
+          .filter(item => item.endMin > item.startMin)  // 범위 밖 일정은 제외
+          .concat(googleTimedItemsFor(date, tlStart, tlEnd));  // 구글 일정도 함께 (연동했을 때만)
 
         layoutDay(items).forEach(item => {
           col.append(createEventBlock(item, tlStart, hourPx, date));
@@ -2146,11 +2336,14 @@
       const friday = days[4];
       el.tlRange.textContent =
         `${viewMonday.getMonth() + 1}월 ${viewMonday.getDate()}일 – ${friday.getMonth() + 1}월 ${friday.getDate()}일`;
-      el.tlEmpty.hidden = eventCount > 0;
+      el.tlEmpty.hidden = eventCount > 0 || hasAllDay;
       const isDefaultWeek = toDateKey(viewMonday) === toDateKey(getDefaultMonday(today));
       el.tlThis.setAttribute("aria-pressed", String(isDefaultWeek));
 
       renderNowLine(today);
+
+      // 구글에 연결돼 있으면 이 주의 구글 일정 가져오기 (이미 있으면 그냥 넘어감)
+      if (gcal.status === "connected") ensureGoogleWeek(viewMonday);
     }
 
     /* ---------------------------------------------------------
@@ -3110,6 +3303,8 @@
       el.stTlEnd.value = st.timelineEnd;
       el.stCategories.textContent = "";
       data.categories.forEach(addCategoryRow);
+      el.stGoogleOn.checked = st.googleEnabled;
+      el.stGoogleClient.value = st.googleClientId;
       el.stError.hidden = true;
       resetClearSamplesButton();
       el.stDialog.showModal();
@@ -3157,11 +3352,21 @@
         return;
       }
 
-      Object.assign(data.settings, { workStart, workEnd, timelineStart: tlStart, timelineEnd: tlEnd });
+      // 구글 연동: 켰다면 클라이언트 ID 모양 확인
+      const googleEnabled = el.stGoogleOn.checked;
+      const googleClientId = el.stGoogleClient.value.trim();
+      if (googleEnabled && !/^[\w-]+\.apps\.googleusercontent\.com$/.test(googleClientId)) {
+        showSettingsError("구글 클라이언트 ID는 ‘….apps.googleusercontent.com’ 으로 끝나야 해요.", el.stGoogleClient);
+        return;
+      }
+      const googleChanged = googleEnabled !== data.settings.googleEnabled || googleClientId !== data.settings.googleClientId;
+
+      Object.assign(data.settings, { workStart, workEnd, timelineStart: tlStart, timelineEnd: tlEnd, googleEnabled, googleClientId });
       data.categories = categories;
       if (saveData()) showToast("설정을 저장했어요.");
       el.stDialog.close();
       renderAll();
+      if (googleChanged) initGoogle();
     });
 
     // 샘플 데이터 모두 지우기 (두 번 눌러야 실행)
@@ -3271,6 +3476,7 @@
       if (saveData()) showToast("백업 파일에서 데이터를 가져왔어요.");
       el.bkDialog.close();
       renderAll();
+      initGoogle();
     });
 
     el.bkClose.addEventListener("click", () => el.bkDialog.close());
@@ -3289,7 +3495,314 @@
     }
 
     /* =========================================================
-       14. 1초마다 화면 갱신
+       14. 구글 캘린더 연동 (인터넷 PC 전용, 읽기 전용)
+       - 설정에서 켰을 때만 동작합니다. 꺼져 있으면 외부와 전혀 통신하지 않아요.
+       - 구글 로그인(팝업)으로 "캘린더 읽기" 권한만 받아서
+         보고 있는 주의 일정을 가져와 타임라인에 함께 보여줍니다.
+       - 구글 일정은 브라우저에 저장하지 않고 화면에만 보여줍니다.
+       - 로그인 열쇠(토큰)는 1시간 동안만 유효해서, 시간이 지나면 버튼을 다시 눌러야 해요.
+       - 설정 방법은 저장소의 GOOGLE_SETUP.md 를 보세요.
+       ========================================================= */
+    const GOOGLE_SCRIPT = "https://accounts.google.com/gsi/client";
+    const GOOGLE_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
+    const GOOGLE_API = "https://www.googleapis.com/calendar/v3";
+    const GOOGLE_REFRESH_MS = 10 * 60 * 1000;   // 연결돼 있으면 10분마다 새로 가져오기
+
+    // 구글 연동 상태 (저장하지 않고 화면이 열려 있는 동안만 기억)
+    const gcal = {
+      status: "off",        // off 꺼짐 / file 파일로 열림 / loading 준비 중 / ready 연결 전
+                            // connecting 연결 중 / connected 연결됨 / expired 시간 끝남 / error 문제
+      message: "",          // 상태 옆에 보여줄 안내
+      tokenClient: null,    // 구글 로그인 도구
+      token: null,          // 로그인 열쇠 (메모리에만 보관)
+      tokenExpires: 0,      // 열쇠가 끝나는 시각
+      calendars: null,      // 내 캘린더 목록
+      weeks: {},            // 주별 일정 { "2026-10-05": [ ... ] }
+      loadingWeeks: {},     // 지금 가져오는 중인 주
+      lastSync: null        // 마지막으로 가져온 시각
+    };
+
+    // 구글 연동을 쓸 수 있는 상태인지
+    function googleWanted() {
+      return data.settings.googleEnabled && data.settings.googleClientId.trim() !== "";
+    }
+
+    // 구글 로그인 스크립트를 필요할 때만 불러오기 (한 번만)
+    let googleScriptPromise = null;
+    function loadGoogleScript() {
+      if (!googleScriptPromise) {
+        googleScriptPromise = new Promise((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = GOOGLE_SCRIPT;
+          script.async = true;
+          script.onload = resolve;
+          script.onerror = () => {
+            googleScriptPromise = null;  // 다음에 다시 시도할 수 있게
+            reject(new Error("script"));
+          };
+          document.head.append(script);
+        });
+      }
+      return googleScriptPromise;
+    }
+
+    // 연동 준비 (처음 열 때, 설정을 바꿨을 때)
+    async function initGoogle() {
+      gcal.token = null;
+      gcal.calendars = null;
+      gcal.weeks = {};
+      gcal.tokenClient = null;
+
+      if (!googleWanted()) { setGoogleStatus("off"); return; }
+      if (location.protocol === "file:") {
+        setGoogleStatus("file", "구글 연동은 웹 주소(https://…)로 열었을 때만 쓸 수 있어요.");
+        return;
+      }
+
+      setGoogleStatus("loading", "구글 연결 준비 중…");
+      try {
+        await loadGoogleScript();
+        gcal.tokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: data.settings.googleClientId.trim(),
+          scope: GOOGLE_SCOPE,
+          callback: onGoogleToken,
+          error_callback: (err) => {
+            // 팝업을 닫았거나 막힌 경우
+            const msg = err && err.type === "popup_closed" ? "로그인 창이 닫혔어요." :
+                        err && err.type === "popup_failed_to_open" ? "팝업이 막혔어요. 이 사이트의 팝업을 허용해 주세요." :
+                        "구글 로그인에 실패했어요.";
+            setGoogleStatus(gcal.token ? "connected" : "ready", msg);
+          }
+        });
+        setGoogleStatus("ready");
+      } catch (err) {
+        setGoogleStatus("error", "구글에 연결할 수 없어요. 인터넷 연결을 확인해 주세요.");
+      }
+    }
+
+    // 상태 바꾸고 화면(버튼·안내) 갱신
+    function setGoogleStatus(status, message = "") {
+      gcal.status = status;
+      gcal.message = message;
+      renderGoogleControls();
+    }
+
+    // 타임라인 위 구글 버튼과 상태 글자
+    function renderGoogleControls() {
+      const btn = el.gBtn;
+      const text = el.gStatus;
+      const s = gcal.status;
+      btn.hidden = ["off", "file", "loading"].includes(s) || (s === "error" && !gcal.tokenClient);
+      text.hidden = s === "off";
+      btn.disabled = s === "connecting";
+
+      btn.textContent =
+        s === "connected" ? "구글 새로고침" :
+        s === "connecting" ? "연결 중…" :
+        s === "ready" ? "구글 캘린더 연결" : "구글 다시 연결";
+
+      let info = gcal.message;
+      if (!info && s === "connected" && gcal.lastSync) {
+        info = `구글 ${pad2(gcal.lastSync.getHours())}:${pad2(gcal.lastSync.getMinutes())} 동기화`;
+      }
+      if (!info && s === "expired") info = "구글 연결 시간이 끝났어요.";
+      text.textContent = info;
+      text.classList.toggle("is-error", ["error", "expired"].includes(s) || /실패|막혔|없어요/.test(info));
+
+      // 설정 창의 "연결 끊기" 버튼
+      el.stGoogleDisconnect.hidden = !gcal.token;
+    }
+
+    // 구글 버튼: 연결 / 새로고침
+    el.gBtn.addEventListener("click", () => {
+      if (gcal.status === "connected" && Date.now() < gcal.tokenExpires) {
+        gcal.weeks = {};             // 새로 가져오기
+        gcal.calendars = null;
+        ensureGoogleWeek(viewMonday);
+        return;
+      }
+      if (!gcal.tokenClient) return;
+      setGoogleStatus("connecting");
+      // prompt: "" → 처음 한 번만 권한을 묻고, 그다음부터는 바로 로그인
+      gcal.tokenClient.requestAccessToken({ prompt: "" });
+    });
+
+    // 로그인 성공 → 열쇠 받기
+    function onGoogleToken(resp) {
+      if (!resp || resp.error) {
+        setGoogleStatus("error", "구글 권한을 받지 못했어요. 다시 연결해 주세요.");
+        return;
+      }
+      if (window.google.accounts.oauth2.hasGrantedAllScopes &&
+          !window.google.accounts.oauth2.hasGrantedAllScopes(resp, GOOGLE_SCOPE)) {
+        setGoogleStatus("error", "캘린더 보기 권한에 체크해야 일정을 가져올 수 있어요.");
+        return;
+      }
+      gcal.token = resp.access_token;
+      gcal.tokenExpires = Date.now() + (Number(resp.expires_in) || 3600) * 1000 - 60 * 1000;
+      gcal.weeks = {};
+      setGoogleStatus("connected");
+      ensureGoogleWeek(viewMonday);
+    }
+
+    // 구글 서버에 읽기 요청
+    async function googleGet(path, params = {}) {
+      const url = new URL(GOOGLE_API + path);
+      Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${gcal.token}` } });
+      if (res.status === 401) {
+        gcal.token = null;
+        throw new Error("expired");
+      }
+      if (!res.ok) throw new Error(`http ${res.status}`);
+      return res.json();
+    }
+
+    // 보고 있는 주의 구글 일정이 없으면 가져오기
+    async function ensureGoogleWeek(monday) {
+      const weekKey = toDateKey(monday);
+      if (gcal.status !== "connected" || gcal.weeks[weekKey] || gcal.loadingWeeks[weekKey]) return;
+      if (Date.now() > gcal.tokenExpires) {
+        gcal.token = null;
+        setGoogleStatus("expired");
+        return;
+      }
+
+      gcal.loadingWeeks[weekKey] = true;
+      try {
+        // 내 캘린더 목록 (구글 캘린더 화면에서 체크해 둔 캘린더만)
+        if (!gcal.calendars) {
+          const list = await googleGet("/users/me/calendarList", { minAccessRole: "reader" });
+          gcal.calendars = (list.items || []).filter(c => c.selected || c.primary);
+        }
+
+        // 월요일 0시 ~ 토요일 0시 사이 일정
+        const timeMin = monday.toISOString();
+        const timeMax = addDays(monday, 5).toISOString();
+        const results = await Promise.all(gcal.calendars.map(cal =>
+          googleGet(`/calendars/${encodeURIComponent(cal.id)}/events`, {
+            timeMin, timeMax, singleEvents: "true", orderBy: "startTime", maxResults: "250"
+          }).then(res => (res.items || []).map(item => toGoogleEvent(item, cal)))
+        ));
+        gcal.weeks[weekKey] = results.flat().filter(Boolean);
+        gcal.lastSync = new Date();
+        setGoogleStatus("connected");
+      } catch (err) {
+        if (err.message === "expired") {
+          setGoogleStatus("expired");
+        } else if (err.message === "http 403") {
+          setGoogleStatus("error", "구글 캘린더 API가 꺼져 있거나 권한이 없어요. GOOGLE_SETUP.md를 확인해 주세요.");
+        } else {
+          setGoogleStatus("error", "구글 일정을 가져오지 못했어요. 잠시 뒤 새로고침해 주세요.");
+        }
+      } finally {
+        delete gcal.loadingWeeks[weekKey];
+      }
+      if (toDateKey(viewMonday) === weekKey) {
+        renderTimeline();
+        scheduleFit();  // 종일 줄이 생기면 높이가 달라지므로 다시 맞추기
+      }
+    }
+
+    // 구글 일정 하나를 대시보드에서 쓰기 쉬운 모양으로 바꾸기
+    function toGoogleEvent(item, cal) {
+      if (item.status === "cancelled" || !item.start) return null;
+      const allDay = !!item.start.date;
+      // 구글 캘린더 주소만 링크로 허용
+      const link = typeof item.htmlLink === "string" && item.htmlLink.startsWith("https://www.google.com/calendar")
+        ? item.htmlLink : "";
+      return {
+        id: item.id,
+        title: item.summary || "(제목 없음)",
+        allDay,
+        // 종일 일정: 끝 날짜는 "그 날 전까지" (구글 규칙)
+        start: allDay ? fromDateKey(item.start.date) : new Date(item.start.dateTime),
+        end: allDay ? fromDateKey(item.end.date) : new Date(item.end.dateTime),
+        location: item.location || "",
+        link,
+        calendarName: cal.summaryOverride || cal.summary || "구글 캘린더",
+        color: /^#[0-9a-f]{6}$/i.test(cal.backgroundColor || "") ? cal.backgroundColor : "#8FB3D9"
+      };
+    }
+
+    // 그 날짜에 보여줄 구글 시간 일정 (타임라인 블록용)
+    function googleTimedItemsFor(date, tlStart, tlEnd) {
+      const list = gcal.weeks[toDateKey(viewMonday)] || [];
+      const dayStart = date.getTime();
+      const dayEnd = addDays(date, 1).getTime();
+      return list
+        .filter(g => !g.allDay && g.start.getTime() < dayEnd && g.end.getTime() > dayStart)
+        .map(g => {
+          // 날짜를 넘기는 일정은 그 날 부분만 잘라서 표시
+          const s = Math.max(0, Math.round((g.start.getTime() - dayStart) / 60000));
+          const e = Math.min(1440, Math.round((g.end.getTime() - dayStart) / 60000));
+          return {
+            event: { title: g.title, start: minutesToTime(s), end: minutesToTime(e), repeatDays: [] },
+            google: g,
+            startMin: Math.max(s, tlStart),
+            endMin: Math.min(e, tlEnd)
+          };
+        })
+        .filter(item => item.endMin > item.startMin);
+    }
+
+    // 그 날짜에 걸친 구글 종일 일정
+    function googleAllDayFor(date) {
+      const list = gcal.weeks[toDateKey(viewMonday)] || [];
+      return list.filter(g => g.allDay && g.start <= date && g.end > date);
+    }
+
+    // 구글 일정 자세히 보기 창
+    function openGoogleEventDialog(g) {
+      el.gdTitle.textContent = g.title;
+      const sameDay = toDateKey(g.start) === toDateKey(g.end);
+      const fmtDate = (d) => `${d.getMonth() + 1}/${d.getDate()} (${DAY_NAMES[d.getDay()]})`;
+      const fmtTime = (d) => `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+      if (g.allDay) {
+        const last = addDays(g.end, -1);
+        el.gdWhen.textContent = toDateKey(g.start) === toDateKey(last)
+          ? `${fmtDate(g.start)} 종일` : `${fmtDate(g.start)} – ${fmtDate(last)} 종일`;
+      } else {
+        el.gdWhen.textContent = sameDay
+          ? `${fmtDate(g.start)} ${fmtTime(g.start)}–${fmtTime(g.end)}`
+          : `${fmtDate(g.start)} ${fmtTime(g.start)} – ${fmtDate(g.end)} ${fmtTime(g.end)}`;
+      }
+      el.gdCalendar.textContent = g.calendarName;
+      el.gdLocation.textContent = g.location;
+      el.gdLocationRow.hidden = !g.location;
+      el.gdLink.hidden = !g.link;
+      if (g.link) el.gdLink.href = g.link;
+      el.gdDialog.showModal();
+    }
+    el.gdClose.addEventListener("click", () => el.gdDialog.close());
+    closeOnBackdrop(el.gdDialog);
+
+    // 설정 창 "연결 끊기": 구글에 준 권한을 돌려받음
+    el.stGoogleDisconnect.addEventListener("click", () => {
+      if (gcal.token && window.google) window.google.accounts.oauth2.revoke(gcal.token, () => {});
+      gcal.token = null;
+      gcal.weeks = {};
+      gcal.calendars = null;
+      setGoogleStatus(gcal.tokenClient ? "ready" : "off", "구글 연결을 끊었어요.");
+      renderTimeline();
+    });
+
+    // 1분마다 확인: 열쇠 시간이 끝났는지, 10분이 지나 새로 가져올 때인지
+    function checkGoogleTimer() {
+      if (gcal.status !== "connected") return;
+      if (Date.now() > gcal.tokenExpires) {
+        gcal.token = null;
+        setGoogleStatus("expired");
+        return;
+      }
+      if (gcal.lastSync && Date.now() - gcal.lastSync.getTime() > GOOGLE_REFRESH_MS) {
+        delete gcal.weeks[toDateKey(viewMonday)];
+        ensureGoogleWeek(viewMonday);
+      }
+    }
+
+    /* =========================================================
+       15. 1초마다 화면 갱신
        - 시계·카운트다운: 매초
        - 현재 시각 선: 분이 바뀔 때만
        - 날짜가 바뀌면: 타임라인(오늘 강조), 마감 D-day, 오늘 할 일(새 목록), 과제 D-day
@@ -3308,12 +3821,14 @@
         renderAll();
       } else if (now.getMinutes() !== lastMinute) {
         renderNowLine(now);
+        checkGoogleTimer();
       }
       lastMinute = now.getMinutes();
     }
 
     // 처음 열었을 때 각 영역 그리기
     renderAll();
+    initGoogle();               // 구글 연동 (설정에서 켰을 때만 동작)
     tick();                     // 시계도 바로 한 번 그리기
     setInterval(tick, 1000);    // 그 다음부터 1초마다 다시 그리기
   </script>

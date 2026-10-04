@@ -1830,7 +1830,14 @@
     // Firebase 웹 앱 설정값 (FIREBASE_SETUP.md 4단계에서 복사한 값)
     // - 비밀번호가 아니라 공개돼도 되는 값이에요. 데이터는 보안 규칙(firestore.rules)으로 보호합니다.
     // - null이면 클라우드 동기화 기능이 숨겨지고, 지금처럼 이 브라우저에만 저장합니다.
-    const FIREBASE_CONFIG = null;
+    const FIREBASE_CONFIG = {
+      apiKey: "AIzaSyBMIvYxEAjXpMv7zMsHdzYj_aE3_SNCQbI",
+      authDomain: "mydashboard-8ae08.firebaseapp.com",
+      projectId: "mydashboard-8ae08",
+      storageBucket: "mydashboard-8ae08.firebasestorage.app",
+      messagingSenderId: "896073492796",
+      appId: "1:896073492796:web:97aa6fcf11cfed1cb09639"
+    };
 
     // 기기별 설정 (클라우드로 동기화하지 않음)
     // - id: 이 기기 구분용 / cloudOff: 이 기기는 클라우드 안 씀

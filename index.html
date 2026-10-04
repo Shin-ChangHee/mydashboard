@@ -1048,6 +1048,28 @@
     }
     .dialog-actions .spacer { flex: 1; }
 
+    /* ---------- 백업 창: 자동 보관본 목록 ---------- */
+    .safety-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .safety-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 10px;
+      background: var(--bg);
+      border-radius: 6px;
+    }
+    .safety-item div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .safety-item strong { font-size: 14px; font-weight: 600; }
+    .safety-item span { font-size: 12px; color: var(--text-sub); overflow-wrap: anywhere; }
+
     /* ---------- 클라우드 동기화 ---------- */
     .btn.is-warn { color: var(--warn); border-color: var(--warn); }
     .cloud-actions {
@@ -1609,9 +1631,16 @@
       <section class="settings-section" aria-labelledby="bkExportTitle">
         <h3 id="bkExportTitle">내보내기</h3>
         <p class="form-hint">지금 데이터를 파일(.json)로 내려받아요. 브라우저 기록을 지우기 전이나 다른 PC로 옮길 때 쓰세요.</p>
+        <p class="form-hint" id="bkLast"></p>
         <div>
           <button type="button" class="btn" id="bkExport">백업 파일 내려받기</button>
         </div>
+      </section>
+
+      <section class="settings-section" aria-labelledby="bkSafetyTitle">
+        <h3 id="bkSafetyTitle">자동 보관본</h3>
+        <p class="form-hint">데이터를 통째로 바꾸기 직전 내용을 이 브라우저에 한 벌씩 보관해 둬요. 골라서 되살릴 수 있어요.</p>
+        <ul class="safety-list" id="bkSafety"></ul>
       </section>
 
       <section class="settings-section" aria-labelledby="bkImportTitle">
@@ -1621,7 +1650,7 @@
         <p class="import-preview" id="bkPreview" hidden></p>
         <p class="form-error" id="bkError" role="alert" hidden></p>
         <div>
-          <button type="button" class="btn btn-danger" id="bkApply" hidden>가져오기 실행</button>
+          <button type="button" class="btn btn-danger" id="bkApply" hidden>이 내용으로 바꾸기</button>
         </div>
       </section>
 
@@ -1692,9 +1721,9 @@
         <span>이 기기 데이터는 브라우저에 한 번 보관해 둬요.</span>
       </button>
       <button type="button" class="choice-btn" id="scUseLocal">
-        <strong>이 기기 데이터로 클라우드 바꾸기</strong>
+        <strong id="scUseLocalTitle">이 기기 데이터로 클라우드 바꾸기</strong>
         <span>지금 화면의 내용 · <span class="num" id="scLocalInfo"></span></span>
-        <span>클라우드에 있던 내용은 이 기기 데이터로 바뀌어요.</span>
+        <span>클라우드에 있던 내용은 이 기기 데이터로 바뀌어요. (원래 내용은 자동 보관본에 남겨 둬요)</span>
       </button>
       <p class="form-hint">고르지 않고 닫으면 로그인을 취소해요.</p>
     </div>
@@ -1855,7 +1884,9 @@
 
     // 기기별 설정 (클라우드로 동기화하지 않음)
     // - id: 이 기기 구분용 / cloudOff: 이 기기는 클라우드 안 씀
-    // - linkedUid: 이 기기가 연결된 계정 / dirty: 연결된 채로 로그아웃 상태에서 바꾼 내용이 있음
+    // - linkedUid: 이 기기가 연결된 계정
+    // - unsynced: 이 기기에서 바꿨는데 아직 클라우드에 못 올린 내용이 있음 (창을 닫아도 기억)
+    // - lastBackup: 이 기기에서 마지막으로 백업 파일을 내려받은 때
     const DEVICE_KEY = "commandCenter.device";
     const device = (() => {
       let saved = {};
@@ -1864,7 +1895,8 @@
         id: saved.id || Math.random().toString(36).slice(2, 10),
         cloudOff: saved.cloudOff === true,
         linkedUid: saved.linkedUid || null,
-        dirty: saved.dirty === true
+        unsynced: saved.unsynced === true || saved.dirty === true,  // dirty는 예전 이름
+        lastBackup: typeof saved.lastBackup === "string" ? saved.lastBackup : null
       };
     })();
     function saveDevice() {
@@ -1875,7 +1907,7 @@
     const cloud = {
       status: "unavailable", message: "",
       fb: null, auth: null, db: null, ref: null, user: null,
-      unsubscribe: null, saveTimer: null, writing: false, pendingUpload: false
+      unsubscribe: null, saveTimer: null, syncing: false, syncAgain: false
     };
     const CURRENT_VERSION = 1;
 
@@ -1915,15 +1947,28 @@
     // 불러온 데이터에 빠진 칸이 있으면 기본값으로 채우고, 이상한 일정은 걸러냄
     function normalizeData(raw) {
       const base = createSampleData();
-      const isTime = (t) => typeof t === "string" && /^\d{2}:\d{2}$/.test(t);
+      const isTime = (t) => typeof t === "string" && /^([01]\d|2[0-4]):[0-5]\d$/.test(t);
       const isDate = (d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d);
 
-      return {
+      const result = {
         version: CURRENT_VERSION,
         settings: (() => {
-          const st = { ...base.settings, ...(raw.settings || {}) };
-          st.googleEnabled = st.googleEnabled === true;
-          st.googleClientId = typeof st.googleClientId === "string" ? st.googleClientId : "";
+          // 설정값은 하나라도 이상하면 화면 전체가 멈출 수 있어서 하나씩 확인하고, 이상하면 기본값을 씀
+          const src = raw.settings && typeof raw.settings === "object" ? raw.settings : {};
+          const st = { ...base.settings };
+          const isHour = (t) => typeof t === "string" && /^([01]\d|2[0-4]):00$/.test(t);
+          if (isTime(src.workStart) && isTime(src.workEnd) &&
+              timeToMinutes(src.workEnd) > timeToMinutes(src.workStart)) {
+            st.workStart = src.workStart;
+            st.workEnd = src.workEnd;
+          }
+          if (isHour(src.timelineStart) && isHour(src.timelineEnd) &&
+              timeToMinutes(src.timelineEnd) - timeToMinutes(src.timelineStart) >= 120) {
+            st.timelineStart = src.timelineStart;
+            st.timelineEnd = src.timelineEnd;
+          }
+          st.googleEnabled = src.googleEnabled === true;
+          st.googleClientId = typeof src.googleClientId === "string" ? src.googleClientId : "";
           return st;
         })(),
         categories: (() => {
@@ -1986,8 +2031,34 @@
             url: l.url,
             ...(l.sample === true ? { sample: true } : {})
           })),
-        seeded: Array.isArray(raw.seeded) ? raw.seeded : []
+        seeded: Array.isArray(raw.seeded) ? raw.seeded.filter(k => typeof k === "string") : []
       };
+
+      // id 정리: 글자·숫자가 아니거나 겹치는 id는 새로 붙임 (겹치면 하나를 고칠 때 다른 것이 바뀌는 문제 방지)
+      ["events", "tasks", "deadlines", "links"].forEach(key => {
+        const seen = new Set();
+        result[key].forEach(item => {
+          if (typeof item.id !== "string" || !/^[\w-]{1,40}$/.test(item.id) || seen.has(item.id)) item.id = makeId();
+          seen.add(item.id);
+        });
+      });
+      const catSeen = new Set();
+      result.categories = result.categories.filter(c => !catSeen.has(c.id) && catSeen.add(c.id));
+      return result;
+    }
+
+    // 자동 보관본: 데이터를 통째로 바꾸기 직전 내용을 브라우저에 한 벌씩 보관 (백업 창에서 되살리기 가능)
+    const SAFETY_COPIES = [
+      { kind: "beforeImport",       label: "가져오기·되살리기 전 내용" },
+      { kind: "beforeSync",         label: "클라우드 데이터로 바꾸기 전 (이 기기 내용)" },
+      { kind: "cloudBeforeReplace", label: "이 기기 데이터로 바꾸기 전 (클라우드 내용)" },
+      { kind: "broken",             label: "읽지 못했던 저장 데이터" }
+    ];
+    function saveSafetyCopy(kind, json) {
+      try {
+        localStorage.setItem(`${STORAGE_KEY}.${kind}`, json);
+        localStorage.setItem(`${STORAGE_KEY}.${kind}.at`, new Date().toISOString());
+      } catch (err) { /* 보관 못 해도 계속 진행 */ }
     }
 
     // 저장된 데이터 불러오기
@@ -2016,9 +2087,7 @@
       } catch (err) {
         // 데이터가 깨져 있으면 원래 내용을 따로 보관해 두고 샘플로 시작
         console.warn("저장된 데이터가 깨져 있어요:", err);
-        try {
-          localStorage.setItem(STORAGE_KEY + ".broken", text);
-        } catch (e) { /* 보관도 못 하면 그냥 넘어감 */ }
+        saveSafetyCopy("broken", text);
         showToast("저장된 데이터를 읽지 못해 샘플로 시작했어요.", true);
         return createSampleData();
       }
@@ -2035,21 +2104,25 @@
         if (!silent) showToast("저장하지 못했어요. 브라우저 저장 공간이나 설정을 확인해 주세요.", true);
         ok = false;
       }
-      if (!localOnly && target === data) noteLocalChange();
+      if (!localOnly && target === data) {
+        noteLocalChange();
+        updateBackupReminder();  // 내용이 생기면 백업 알림도 바로 갱신
+      }
       return ok;
     }
 
     // 내용이 바뀌었을 때 클라우드 쪽 처리
+    // - "못 올린 변경 있음"을 먼저 기기에 적어 두고 → 로그인 중이면 곧 클라우드에 올림
+    // - 창을 바로 닫거나 로그아웃 상태여도, 다음에 열고 로그인하면 클라우드와 합쳐서 올림
     function noteLocalChange() {
       if (!device.linkedUid) return;                       // 클라우드와 연결된 적 없는 기기
-      if (cloud.user && cloud.user.uid === device.linkedUid) {
-        scheduleCloudSave();                               // 로그인 중 → 곧 클라우드에 저장
-      } else if (cloud.status === "loading") {
-        cloud.pendingUpload = true;                        // 로그인 확인 중 → 확인되면 저장
-      } else {
-        device.dirty = true;                               // 로그아웃 상태에서 바뀜 → 다음 로그인 때 물어보기
-        saveDevice();
-      }
+      markUnsynced(true);
+      if (cloud.user && cloud.user.uid === device.linkedUid) scheduleCloudSave();
+    }
+    function markUnsynced(flag) {
+      if (device.unsynced === flag) return;
+      device.unsynced = flag;
+      saveDevice();
     }
 
     // 화면 아래에 잠깐 알림 띄우기
@@ -2194,7 +2267,10 @@
       scUseCloud: document.getElementById("scUseCloud"),
       scUseLocal: document.getElementById("scUseLocal"),
       scCloudInfo: document.getElementById("scCloudInfo"),
-      scLocalInfo: document.getElementById("scLocalInfo")
+      scLocalInfo: document.getElementById("scLocalInfo"),
+      scUseLocalTitle: document.getElementById("scUseLocalTitle"),
+      bkSafety: document.getElementById("bkSafety"),
+      bkLast: document.getElementById("bkLast")
     };
 
     // 입력 창 바깥(어두운 부분)을 누르면 닫히게 하기
@@ -3671,7 +3747,75 @@
       el.bkPreview.hidden = true;
       el.bkApply.hidden = true;
       el.bkError.hidden = true;
+      el.bkLast.textContent = device.lastBackup
+        ? `이 기기에서 마지막으로 내려받은 때: ${formatDateTime(new Date(device.lastBackup))}`
+        : "이 기기에서는 아직 백업 파일을 내려받은 적이 없어요.";
+      renderSafetyList();
       el.bkDialog.showModal();
+    }
+
+    // 자동 보관본 목록 그리기
+    function renderSafetyList() {
+      el.bkSafety.textContent = "";
+      SAFETY_COPIES.forEach(({ kind, label }) => {
+        let text = null, at = null;
+        try {
+          text = localStorage.getItem(`${STORAGE_KEY}.${kind}`);
+          at = localStorage.getItem(`${STORAGE_KEY}.${kind}.at`);
+        } catch (err) { /* 넘어감 */ }
+        if (!text) return;
+
+        let copy = null;
+        try {
+          const migrated = migrate(JSON.parse(text));
+          if (migrated) copy = normalizeData(migrated);
+        } catch (err) { /* 읽을 수 없는 보관본 */ }
+
+        const li = document.createElement("li");
+        li.className = "safety-item";
+        const info = document.createElement("div");
+        const name = document.createElement("strong");
+        name.textContent = label;
+        const detail = document.createElement("span");
+        detail.className = "num";
+        detail.textContent = `${at ? formatDateTime(new Date(at)) + " 보관" : "보관 시각 모름"} · ${copy ? summarize(copy) : "읽을 수 없는 데이터"}`;
+        info.append(name, detail);
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn btn-small";
+        btn.textContent = "되살리기";
+        btn.disabled = !copy;
+        btn.addEventListener("click", () => {
+          pendingImport = copy;
+          pendingImport.seeded = ["events", "deadlines", "tasks", "links", "sampleFlags"];
+          el.bkError.hidden = true;
+          el.bkPreview.textContent = `‘${label}’ (${summarize(copy)}) 으로 되살려요. 지금 데이터는 자동 보관본에 남겨 둬요.`;
+          el.bkPreview.hidden = false;
+          el.bkApply.hidden = false;
+          el.bkApply.focus();
+        });
+
+        li.append(info, btn);
+        el.bkSafety.append(li);
+      });
+      if (!el.bkSafety.children.length) {
+        const empty = document.createElement("li");
+        empty.className = "empty-text";
+        empty.textContent = "아직 보관본이 없어요.";
+        el.bkSafety.append(empty);
+      }
+    }
+
+    // 백업 알림: 클라우드 사본이 없는 기기에서 7일 넘게 백업 파일을 안 받았으면 백업 버튼에 표시
+    const BACKUP_REMIND_DAYS = 7;
+    function updateBackupReminder() {
+      const cloudProtected = !!device.linkedUid && !device.cloudOff;
+      const days = device.lastBackup ? Math.floor((Date.now() - new Date(device.lastBackup)) / 86400000) : null;
+      const need = !cloudProtected && !isSampleOnly(data) && (days === null || days >= BACKUP_REMIND_DAYS);
+      el.backupBtn.textContent = need ? (days === null ? "백업 · 한 번도 안 함" : `백업 · ${days}일 전`) : "백업";
+      el.backupBtn.classList.toggle("is-warn", need);
+      el.backupBtn.title = need ? "이 기기에만 저장된 데이터예요. 백업 파일을 내려받아 두세요." : "";
     }
 
     // 내보내기: 데이터를 글자(JSON)로 바꿔 파일로 저장
@@ -3686,6 +3830,10 @@
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
+      device.lastBackup = new Date().toISOString();
+      saveDevice();
+      updateBackupReminder();
+      el.bkLast.textContent = `이 기기에서 마지막으로 내려받은 때: ${formatDateTime(new Date())}`;
       showToast("백업 파일을 내려받았어요.");
     });
 
@@ -3733,9 +3881,7 @@
     el.bkApply.addEventListener("click", () => {
       if (!pendingImport) return;
       // 혹시 모를 실수에 대비해, 바꾸기 전 데이터를 한 번 보관
-      try {
-        localStorage.setItem(STORAGE_KEY + ".beforeImport", JSON.stringify(data));
-      } catch (err) { /* 보관 못 해도 계속 진행 */ }
+      saveSafetyCopy("beforeImport", JSON.stringify(data));
 
       // data 안의 내용을 통째로 바꾸기
       Object.keys(data).forEach(key => { delete data[key]; });
@@ -3760,6 +3906,7 @@
       renderTasks();
       renderLinks();
       renderCountdown(new Date());
+      updateBackupReminder();
       scheduleFit();
     }
 
@@ -4141,36 +4288,40 @@
       cloud.ref = cloud.fb.doc(cloud.db, "users", user.uid);
       setCloudStatus("syncing");
 
-      // 이 기기가 이 계정과 이미 연결돼 있고, 로그아웃 중에 바꾼 내용이 없으면 바로 실시간 동기화
-      if (device.linkedUid === user.uid && !device.dirty) {
-        if (cloud.pendingUpload) {
-          cloud.pendingUpload = false;
-          writeCloudNow();  // 로그인 확인 중에 바꾼 내용 먼저 올리기
-        }
+      // 이미 이 계정과 연결된 기기: 실시간 동기화를 켜고, 못 올린 변경이 있으면 클라우드와 합쳐서 올림
+      if (device.linkedUid === user.uid) {
         startCloudListener();
+        if (device.unsynced) syncNow();
         return;
       }
 
       // 처음 연결: 클라우드에 이미 데이터가 있는지 확인
       try {
         const snap = await cloud.fb.getDoc(cloud.ref);
-        const remote = snap.exists() ? parseRemote(snap.data()) : null;
-        if (!remote) {
+        if (!snap.exists()) {
           // 클라우드가 비어 있음 → 이 기기 데이터를 올림
           linkDevice(user.uid);
-          writeCloudNow();
+          markUnsynced(true);
+          syncNow();
           startCloudListener();
-        } else if (JSON.stringify(remote) === JSON.stringify(data)) {
-          linkDevice(user.uid);
-          startCloudListener();
-        } else {
-          openSyncChoice(remote);  // 둘 다 데이터가 있음 → 어느 쪽을 쓸지 물어보기
+          return;
         }
+        const remote = parseRemote(snap.data());
+        if (!remote) { setCloudStatus("error", NEWER_VERSION_MESSAGE); return; }  // 덮어쓰지 않음
+        if (JSON.stringify(remote) === JSON.stringify(data) || isSampleOnly(data)) {
+          // 같은 내용이거나, 이 기기에 샘플밖에 없으면 묻지 않고 클라우드 데이터 사용
+          useCloudData(remote);
+          return;
+        }
+        openSyncChoice(remote, snap.data().updatedAt);  // 둘 다 데이터가 있음 → 어느 쪽을 쓸지 물어보기
       } catch (err) {
         console.warn("클라우드 확인 실패:", err);
         setCloudStatus("error", cloudErrorMessage(err));
       }
     }
+
+    const NEWER_VERSION_MESSAGE = "클라우드 데이터가 더 새 버전의 대시보드에서 저장됐어요. 페이지를 새로고침(Ctrl+F5)해 주세요.";
+    const MAX_CLOUD_BYTES = 1000000;  // Firestore 문서 하나의 최대 크기(약 1MB)보다 조금 작게
 
     // 클라우드 문서 → 대시보드 데이터 (못 읽으면 null)
     function parseRemote(docData) {
@@ -4182,38 +4333,135 @@
       }
     }
 
+    // 사용자가 넣은 내용 없이 처음 샘플만 있는지
+    function isSampleOnly(d) {
+      const onlySamples = ["events", "tasks", "deadlines", "links"].every(key => d[key].every(item => item.sample));
+      const noTodos = Object.values(d.todayTodos).every(list => list.length === 0);
+      return onlySamples && noTodos;
+    }
+
     function linkDevice(uid) {
       device.linkedUid = uid;
-      device.dirty = false;
       saveDevice();
+      clearBase();  // 새로 연결하면 예전 기준점은 버림
+    }
+
+    // 클라우드 데이터를 이 기기에 그대로 받기 (이 기기 내용은 자동 보관본으로 남김)
+    function useCloudData(remote) {
+      if (JSON.stringify(remote) !== JSON.stringify(data)) saveSafetyCopy("beforeSync", JSON.stringify(data));
+      linkDevice(cloud.user.uid);
+      replaceData(remote);
+      saveBase(remote);
+      markUnsynced(false);
+      startCloudListener();
+      setCloudStatus("synced");
     }
 
     // data 안의 내용을 통째로 바꾸고 화면 다시 그리기 (클라우드로는 다시 올리지 않음)
-    function replaceData(next) {
+    // - save=false: 브라우저 저장도 하지 않음 (다른 탭이 이미 저장한 내용을 받을 때)
+    function replaceData(next, save = true) {
       Object.keys(data).forEach(key => { delete data[key]; });
       Object.assign(data, next);
-      saveData(data, true, true);
+      if (save) saveData(data, true, true);
       renderAll();
+    }
+
+    /* ---------------------------------------------------------
+       기준점과 합치기
+       - 기준점(base): 마지막으로 클라우드와 똑같았던 내용 (이 기기에 보관)
+       - 두 기기에서 따로 고쳤을 때 기준점과 비교해 "누가 무엇을 바꿨는지" 알아내 합칩니다.
+         · 한쪽만 바꾼 항목 → 바꾼 쪽을 따름
+         · 양쪽이 같은 항목을 다르게 바꿈 → 지금 이 기기 쪽을 따름
+         · 한쪽에서 지운 항목 → 다른 쪽에서 고치지 않았다면 지움
+       --------------------------------------------------------- */
+    const BASE_KEY = "commandCenter.cloudBase";
+    function loadBase() {
+      try {
+        const text = localStorage.getItem(BASE_KEY);
+        const migrated = text ? migrate(JSON.parse(text)) : null;
+        return migrated ? normalizeData(migrated) : null;
+      } catch (err) {
+        return null;
+      }
+    }
+    function saveBase(d) {
+      try { localStorage.setItem(BASE_KEY, JSON.stringify(d)); } catch (err) { /* 넘어감 */ }
+    }
+    function clearBase() {
+      try { localStorage.removeItem(BASE_KEY); } catch (err) { /* 넘어감 */ }
+    }
+
+    function mergeData(base, local, remote) {
+      const b = base || {};
+      const same = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+      // 값 하나: 같으면 그대로, 이 기기가 안 바꿨으면 클라우드 것, 아니면 이 기기 것
+      const pick = (bv, lv, rv) => same(lv, rv) ? lv : same(lv, bv) ? rv : lv;
+
+      // id가 있는 목록 (일정·과제·마감·바로가기·카테고리)
+      const mergeList = (bList, lList, rList) => {
+        const toMap = (list) => new Map((list || []).map(item => [item.id, item]));
+        const B = toMap(bList), L = toMap(lList), R = toMap(rList);
+        const result = [];
+        const done = new Set();
+        [...lList, ...rList].forEach(({ id }) => {
+          if (done.has(id)) return;
+          done.add(id);
+          const bi = B.get(id), li = L.get(id), ri = R.get(id);
+          if (li && ri) result.push(pick(bi, li, ri));
+          else if (li) { if (!(bi && same(li, bi))) result.push(li); }  // 클라우드에서 지움 → 안 고쳤으면 따라 지움
+          else if (ri) { if (!(bi && same(ri, bi))) result.push(ri); }  // 이 기기에서 지움 → 클라우드도 안 고쳤으면 지움
+        });
+        return result;
+      };
+
+      // 날짜별 할 일, 설정: 칸(키)별로 합치기
+      const mergeKeys = (bObj = {}, lObj, rObj) => {
+        const out = {};
+        new Set([...Object.keys(lObj), ...Object.keys(rObj)]).forEach(key => {
+          const v = pick(bObj[key], lObj[key], rObj[key]);
+          if (v !== undefined) out[key] = v;
+        });
+        return out;
+      };
+
+      const categories = mergeList(b.categories, local.categories, remote.categories);
+      return normalizeData({
+        version: CURRENT_VERSION,
+        settings: mergeKeys(b.settings, local.settings, remote.settings),
+        categories: categories.length ? categories : local.categories,
+        events: mergeList(b.events, local.events, remote.events),
+        tasks: mergeList(b.tasks, local.tasks, remote.tasks),
+        deadlines: mergeList(b.deadlines, local.deadlines, remote.deadlines),
+        links: mergeList(b.links, local.links, remote.links),
+        todayTodos: mergeKeys(b.todayTodos, local.todayTodos, remote.todayTodos),
+        seeded: [...new Set([...local.seeded, ...remote.seeded])]
+      });
     }
 
     // 실시간 동기화: 다른 기기에서 바꾸면 몇 초 안에 이 화면에도 반영
     function startCloudListener() {
       stopCloudListener();
+      // includeMetadataChanges: 내용이 같아도 "서버에서 확인됨" 소식을 받기 위해 (안 받으면 '저장 중'에 머묾)
       cloud.unsubscribe = cloud.fb.onSnapshot(cloud.ref, { includeMetadataChanges: true }, (snap) => {
-        // 아직 서버에 안 올라간 내 저장이 있으면 "저장 중"
-        if (snap.metadata.hasPendingWrites) {
-          setCloudStatus(navigator.onLine ? "syncing" : "offline");
+        if (snap.metadata.fromCache) return;   // 서버에서 확인된 내용만 사용 (기기 안 사본은 오래됐을 수 있음)
+        if (snap.metadata.hasPendingWrites) return;
+        if (cloud.syncing) return;             // 지금 올리는 중이면 그 결과로 정리됨
+        if (!snap.exists()) { markUnsynced(true); syncNow(); return; }  // 클라우드 문서가 지워졌으면 다시 올림
+
+        const remote = parseRemote(snap.data());
+        if (!remote) { setCloudStatus("error", NEWER_VERSION_MESSAGE); return; }
+
+        if (device.unsynced) {
+          // 이 기기에도 아직 못 올린 변경이 있음 → 둘을 합친 뒤 다시 올림
+          const merged = mergeData(loadBase(), data, remote);
+          saveBase(remote);
+          if (JSON.stringify(merged) !== JSON.stringify(data)) replaceData(merged);
+          scheduleCloudSave();
           return;
         }
-        setCloudStatus(snap.metadata.fromCache && !navigator.onLine ? "offline" : "synced");
-
-        if (!snap.exists()) { writeCloudNow(); return; }  // 클라우드 문서가 지워졌으면 다시 올림
-        if (cloud.saveTimer || cloud.writing) return;     // 내가 저장하려는 중이면 내 것이 우선
-
-        const json = snap.data().json;
-        if (json === JSON.stringify(data)) return;        // 이미 같은 내용
-        const remote = parseRemote(snap.data());
-        if (!remote) return;
+        saveBase(remote);
+        setCloudStatus("synced");
+        if (JSON.stringify(remote) === JSON.stringify(data)) return;  // 이미 같은 내용
         replaceData(remote);
         if (snap.data().device !== device.id) showToast("다른 기기에서 바뀐 내용을 가져왔어요.");
       }, (err) => {
@@ -4234,28 +4482,93 @@
       setCloudStatus("syncing");
       cloud.saveTimer = setTimeout(() => {
         cloud.saveTimer = null;
-        writeCloudNow();
+        syncNow();
       }, 1000);
     }
 
-    // 지금 데이터를 클라우드에 저장
-    async function writeCloudNow() {
-      if (!cloud.user) return;
-      cloud.writing = true;
+    // 클라우드와 맞추기
+    // - 트랜잭션: 클라우드의 최신 내용을 읽고 → 기준점으로 합치고 → 저장 (그사이 누가 저장하면 자동으로 다시 시도)
+    // - 인터넷이 끊겨 있으면 올리지 않고 "못 올린 변경 있음"으로 남겨 둠 → 연결되면 다시 시도
+    async function syncNow() {
+      if (!cloud.user || device.linkedUid !== cloud.user.uid) return;
+      if (cloud.syncing) { cloud.syncAgain = true; return; }
+      clearTimeout(cloud.saveTimer);
+      cloud.saveTimer = null;
+      if (!navigator.onLine) { setCloudStatus("offline"); return; }
+
+      cloud.syncing = true;
+      setCloudStatus("syncing");
+      const startJson = JSON.stringify(data);
+      const startLocal = JSON.parse(startJson);
+      const fail = (code) => Object.assign(new Error(code), { cloudCode: code });
       try {
-        await cloud.fb.setDoc(cloud.ref, {
-          json: JSON.stringify(data),
-          version: CURRENT_VERSION,
-          device: device.id,
-          updatedAt: cloud.fb.serverTimestamp()
+        const result = await cloud.fb.runTransaction(cloud.db, async (tx) => {
+          const snap = await tx.get(cloud.ref);
+          let merged = startLocal;
+          if (snap.exists()) {
+            const remote = parseRemote(snap.data());
+            if (!remote) throw fail("newer");
+            merged = mergeData(loadBase(), startLocal, remote);
+          }
+          const json = JSON.stringify(merged);
+          if (new TextEncoder().encode(json).length > MAX_CLOUD_BYTES) throw fail("too-big");
+          tx.set(cloud.ref, { json, version: CURRENT_VERSION, device: device.id, updatedAt: cloud.fb.serverTimestamp() });
+          return merged;
         });
+
+        saveBase(result);
+        const changedByOthers = JSON.stringify(result) !== startJson;
+        if (JSON.stringify(data) === startJson) {
+          if (changedByOthers) replaceData(result);
+          markUnsynced(false);
+        } else {
+          // 올리는 동안 이 기기에서 또 바뀜 → 그 변경도 합쳐 두고 한 번 더 올림
+          replaceData(mergeData(startLocal, data, result));
+          cloud.syncAgain = true;
+        }
+        if (changedByOthers) showToast("다른 기기에서 바뀐 내용과 합쳤어요.");
+        setCloudStatus("synced");
+      } catch (err) {
+        console.warn("클라우드 저장 실패:", err);
+        setCloudStatus("error",
+          err.cloudCode === "too-big" ? "데이터가 너무 커서 클라우드에 올리지 못했어요(최대 약 1MB). 이 기기에는 저장돼 있어요. 오래된 기록을 정리해 주세요." :
+          err.cloudCode === "newer" ? NEWER_VERSION_MESSAGE :
+          cloudErrorMessage(err));
+      } finally {
+        cloud.syncing = false;
+        if (cloud.syncAgain) {
+          cloud.syncAgain = false;
+          scheduleCloudSave();
+        }
+      }
+    }
+
+    // 이 기기 내용으로 클라우드를 통째로 바꾸기 (처음 연결 때 사용자가 고른 경우만)
+    async function forceUpload() {
+      const json = JSON.stringify(data);
+      if (new TextEncoder().encode(json).length > MAX_CLOUD_BYTES) {
+        setCloudStatus("error", "데이터가 너무 커서 클라우드에 올리지 못했어요(최대 약 1MB). 이 기기에는 저장돼 있어요.");
+        return;
+      }
+      markUnsynced(true);
+      try {
+        await cloud.fb.setDoc(cloud.ref, { json, version: CURRENT_VERSION, device: device.id, updatedAt: cloud.fb.serverTimestamp() });
+        saveBase(data);
+        markUnsynced(false);
+        setCloudStatus("synced");
       } catch (err) {
         console.warn("클라우드 저장 실패:", err);
         setCloudStatus("error", cloudErrorMessage(err));
-      } finally {
-        cloud.writing = false;
       }
     }
+
+    // 창을 닫거나 다른 앱으로 넘어갈 때: 기다리던 저장을 바로 올림
+    // (그래도 못 올렸으면 "못 올린 변경 있음"이 남아 있어서 다음에 열 때 올라감)
+    function flushCloudSave() {
+      if (cloud.saveTimer) syncNow();
+    }
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushCloudSave(); });
+    window.addEventListener("pagehide", flushCloudSave);
 
     // 오류를 쉬운 말로
     function cloudErrorMessage(err) {
@@ -4365,35 +4678,43 @@
 
     // 처음 연결할 때: 클라우드 데이터와 이 기기 데이터 중 고르기
     let pendingRemote = null;
+    let replaceArmed = false;
     function summarize(d) {
-      return `일정 ${d.events.length}개 · 과제 ${d.tasks.length}개 · 마감 ${d.deadlines.length}개 · 바로가기 ${d.links.length}개`;
+      const todoDays = Object.values(d.todayTodos).filter(list => list.length).length;
+      return `일정 ${d.events.length}개 · 과제 ${d.tasks.length}개 · 마감 ${d.deadlines.length}개 · 바로가기 ${d.links.length}개 · 할 일 기록 ${todoDays}일`;
     }
-    function openSyncChoice(remote) {
+    function formatDateTime(d) {
+      return `${d.getMonth() + 1}/${d.getDate()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+    }
+    function openSyncChoice(remote, updatedAt) {
       pendingRemote = remote;
-      el.scCloudInfo.textContent = summarize(remote);
+      replaceArmed = false;
+      el.scUseLocalTitle.textContent = "이 기기 데이터로 클라우드 바꾸기";
+      const when = updatedAt && updatedAt.toDate ? ` · 마지막 저장 ${formatDateTime(updatedAt.toDate())}` : "";
+      el.scCloudInfo.textContent = summarize(remote) + when;
       el.scLocalInfo.textContent = summarize(data);
       el.scDialog.showModal();
     }
-    // 이 기기 데이터는 혹시 몰라 한 번 보관해 두고 선택한 쪽으로 맞춤
-    function backupLocalBeforeSync() {
-      try { localStorage.setItem(STORAGE_KEY + ".beforeSync", JSON.stringify(data)); } catch (err) { /* 넘어감 */ }
-    }
     el.scUseCloud.addEventListener("click", () => {
-      backupLocalBeforeSync();
-      linkDevice(cloud.user.uid);
-      replaceData(pendingRemote);
-      pendingRemote = null;
       el.scDialog.close("chosen");
-      startCloudListener();
-      showToast("클라우드 데이터를 불러왔어요.");
+      useCloudData(pendingRemote);
+      pendingRemote = null;
+      showToast("클라우드 데이터를 불러왔어요. 이 기기 내용은 백업 창의 자동 보관본에 남겨 뒀어요.");
     });
+    // 클라우드를 덮어쓰는 쪽은 실수하면 안 되니 두 번 눌러야 실행 + 클라우드 내용을 먼저 보관
     el.scUseLocal.addEventListener("click", () => {
+      if (!replaceArmed) {
+        replaceArmed = true;
+        el.scUseLocalTitle.textContent = "한 번 더 누르면 클라우드 내용이 이 기기 내용으로 바뀌어요";
+        return;
+      }
+      saveSafetyCopy("cloudBeforeReplace", JSON.stringify(pendingRemote));
       linkDevice(cloud.user.uid);
       pendingRemote = null;
       el.scDialog.close("chosen");
-      writeCloudNow();
+      forceUpload();
       startCloudListener();
-      showToast("이 기기 데이터로 클라우드를 바꿨어요.");
+      showToast("이 기기 데이터로 클라우드를 바꿨어요. 원래 클라우드 내용은 자동 보관본에 남겨 뒀어요.");
     });
     // 고르지 않고 닫으면 로그아웃 (아무것도 바꾸지 않음)
     el.scDialog.addEventListener("close", () => {
@@ -4404,12 +4725,25 @@
       el.scDialog.returnValue = "";
     });
 
+    // 같은 브라우저의 다른 탭에서 저장하면 → 이 탭도 그 내용으로 바꿈 (서로 덮어쓰지 않게)
+    window.addEventListener("storage", (e) => {
+      if (e.key === DEVICE_KEY && e.newValue) {
+        try { Object.assign(device, JSON.parse(e.newValue)); } catch (err) { /* 넘어감 */ }
+        return;
+      }
+      if (e.key !== STORAGE_KEY || !e.newValue) return;
+      try {
+        const migrated = migrate(JSON.parse(e.newValue));
+        if (migrated) replaceData(normalizeData(migrated), false);
+      } catch (err) { /* 읽을 수 없으면 무시 */ }
+    });
+
     el.cloudBtn.addEventListener("click", openCloudDialog);
     el.cdClose.addEventListener("click", () => el.cdDialog.close());
     closeOnBackdrop(el.cdDialog);
 
     // 인터넷 연결 상태가 바뀌면 표시 갱신
-    window.addEventListener("online", () => { if (cloud.status === "offline") setCloudStatus("syncing"); });
+    window.addEventListener("online", () => { if (cloud.user && device.unsynced) syncNow(); });
     window.addEventListener("offline", () => { if (cloud.user) setCloudStatus("offline"); });
 
     /* =========================================================
@@ -4428,6 +4762,12 @@
 
       const dateKey = toDateKey(now);
       if (dateKey !== lastDateKey) {
+        // 어제 기준 "이번 주"를 보고 있었다면 → 새 날짜의 주·요일로 옮김 (다른 주를 보고 있었다면 그대로)
+        const wasCurrentWeek = toDateKey(viewMonday) === toDateKey(getDefaultMonday(fromDateKey(lastDateKey)));
+        if (wasCurrentWeek) {
+          viewMonday = getDefaultMonday(now);
+          mobileDay = defaultDayIndex();
+        }
         lastDateKey = dateKey;
         renderAll();
       } else if (now.getMinutes() !== lastMinute) {
@@ -4441,6 +4781,9 @@
     renderAll();
     initGoogle();               // 구글 캘린더 연동 (설정에서 켰을 때만 동작)
     initCloud();                // 클라우드 동기화 (Firebase 설정이 있을 때만 동작)
+
+    // 브라우저가 저장 공간이 부족할 때 이 사이트 데이터를 먼저 지우지 않도록 요청
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
     // 홈 화면 앱(PWA): 인터넷이 끊겨도 열리도록 화면 파일을 기기에 보관
     // (파일을 더블클릭해서 열었을 때는 쓰지 않음)

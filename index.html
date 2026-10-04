@@ -593,6 +593,170 @@
     .input:disabled { opacity: 0.6; cursor: not-allowed; }
 
     /* =========================================================
+       [E] 진행 중인 과제
+       ========================================================= */
+    /* 상태별 색 (카드 상태 표시·진행률 막대에 사용) */
+    .task-card { --status-color: var(--text-sub); }
+    .task-card.is-active  { --status-color: var(--cat-focus); }
+    .task-card.is-waiting { --status-color: var(--cat-meeting); }
+    .task-card.is-hold    { --status-color: var(--warn); }
+    .task-card.is-done    { --status-color: var(--text-sub); }
+
+    .task-head { flex-wrap: wrap; }
+    .task-tools {
+      display: flex;
+      align-items: center;
+      gap: 8px 12px;
+      flex-wrap: wrap;
+    }
+
+    /* 필터 버튼 묶음: 하나로 이어진 막대 모양 */
+    .filter-group {
+      display: flex;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .filter-btn {
+      background: none;
+      border: 0;
+      border-left: 1px solid var(--line);
+      padding: 4px 12px;
+      font-size: 13px;
+      color: var(--text-sub);
+      cursor: pointer;
+    }
+    .filter-btn:first-child { border-left: 0; }
+    .filter-btn:hover { color: var(--text); }
+    .filter-btn[aria-pressed="true"] {
+      background: var(--line);
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* 카드 배치: 폭에 맞춰 자동으로 여러 줄 */
+    .task-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 12px;
+    }
+    .task-grid:empty { display: none; }
+
+    /* 카드: 그림자 없이 배경 명도 차이 + 얇은 선 */
+    .task-card {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .task-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .task-title {
+      background: none;
+      border: 0;
+      padding: 0;
+      text-align: left;
+      font: inherit;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .task-title:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .task-card.is-done .task-title { color: var(--text-sub); }
+
+    /* 상태 표시: 상태 색 테두리의 작은 알약 모양 */
+    .task-status {
+      flex-shrink: 0;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--status-color);
+      border: 1px solid var(--status-color);
+      border-radius: 999px;
+      padding: 1px 8px;
+      white-space: nowrap;
+    }
+
+    /* 진행률 줄: [−] 막대 [+] 40% */
+    .task-progress {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .task-bar {
+      flex: 1;
+      height: 8px;
+      background: var(--line);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .task-bar-fill {
+      height: 100%;
+      background: var(--status-color);
+      border-radius: 4px;
+      transition: width 0.25s ease;
+    }
+    .task-percent {
+      width: 40px;
+      text-align: right;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .step-btn {
+      width: 28px;
+      height: 28px;
+      flex-shrink: 0;
+      background: none;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      font-size: 16px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .step-btn:hover { background: var(--line); }
+    .step-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .step-btn:disabled:hover { background: none; }
+
+    .task-next {
+      margin: 0;
+      font-size: 14px;
+      display: flex;
+      gap: 8px;
+      min-width: 0;
+    }
+    .task-next .is-empty { color: var(--text-sub); }
+    .task-label {
+      flex-shrink: 0;
+      font-size: 13px;
+      color: var(--text-sub);
+    }
+    .task-due {
+      margin: 0;
+      font-size: 13px;
+      color: var(--text-sub);
+    }
+    /* 과제 마감도 D-day 색상 규칙 그대로 */
+    .task-due.is-danger { color: var(--danger); }
+    .task-due.is-warn   { color: var(--warn); }
+
+    /* 진행률 슬라이더 (과제 입력 창) */
+    .range {
+      width: 100%;
+      accent-color: var(--text);
+    }
+
+    /* =========================================================
        입력 창(모달): 일정 추가/수정
        - <dialog>를 사용하면 Esc 닫기, 포커스 가두기가 기본으로 됩니다.
        ========================================================= */
@@ -846,11 +1010,27 @@
     </div>
 
     <!-- ===================================================
-         [E] 진행 중인 과제 (5단계에서 구현)
+         [E] 진행 중인 과제
          =================================================== -->
-    <section class="area area-tasks" aria-labelledby="tasksTitle">
-      <h2 id="tasksTitle">진행 중인 과제</h2>
-      <p class="placeholder">과제 카드와 진행률이 들어올 자리예요. (5단계)</p>
+    <section class="area area-tasks panel" aria-labelledby="tasksTitle">
+      <div class="panel-head task-head">
+        <h2 id="tasksTitle">진행 중인 과제</h2>
+        <div class="task-tools">
+          <!-- 상태 필터 -->
+          <div class="filter-group" id="taskFilters" role="group" aria-label="상태별 보기">
+            <button type="button" class="filter-btn" data-filter="전체">전체</button>
+            <button type="button" class="filter-btn" data-filter="진행 중">진행 중</button>
+            <button type="button" class="filter-btn" data-filter="대기">대기</button>
+            <button type="button" class="filter-btn" data-filter="보류">보류</button>
+            <button type="button" class="filter-btn" data-filter="완료">완료</button>
+          </div>
+          <button type="button" class="btn btn-small" id="taskAdd">과제 추가</button>
+        </div>
+      </div>
+      <p class="empty-text" id="taskEmpty" hidden></p>
+      <!-- 과제 카드는 JavaScript가 채웁니다 (renderTasks 함수) -->
+      <div class="task-grid" id="taskGrid"></div>
+      <p class="form-hint" id="taskDoneNote" hidden></p>
     </section>
 
     <!-- ===================================================
@@ -953,6 +1133,55 @@
         <button type="button" class="btn btn-danger" id="dlDelete">삭제</button>
         <span class="spacer"></span>
         <button type="button" class="btn" id="dlCancel">취소</button>
+        <button type="submit" class="btn btn-primary">저장</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ===================================================
+       과제 추가/수정 입력 창
+       =================================================== -->
+  <dialog class="dialog" id="taskDialog" aria-labelledby="taskDialogTitle">
+    <form class="dialog-form" id="taskForm" novalidate>
+      <h2 id="taskDialogTitle">과제 추가</h2>
+
+      <label class="field">
+        <span class="field-label">과제명</span>
+        <input class="input" type="text" id="tkTitle" maxlength="60" autocomplete="off" placeholder="예: 디지털혁신포럼 부스 준비">
+      </label>
+
+      <div class="field-row">
+        <label class="field">
+          <span class="field-label">상태</span>
+          <select class="input" id="tkStatus">
+            <option value="진행 중">진행 중</option>
+            <option value="대기">대기</option>
+            <option value="보류">보류</option>
+            <option value="완료">완료</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">마감일 (선택)</span>
+          <input class="input num" type="date" id="tkDue">
+        </label>
+      </div>
+
+      <label class="field">
+        <span class="field-label">진행률 <span class="num" id="tkProgressValue">0%</span></span>
+        <input class="range" type="range" id="tkProgress" min="0" max="100" step="10" value="0">
+      </label>
+
+      <label class="field">
+        <span class="field-label">다음 할 일 (한 줄)</span>
+        <input class="input" type="text" id="tkNext" maxlength="80" autocomplete="off" placeholder="예: 부스 배치도 초안 만들기">
+      </label>
+
+      <p class="form-error" id="tkError" role="alert" hidden></p>
+
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-danger" id="tkDelete">삭제</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" id="tkCancel">취소</button>
         <button type="submit" class="btn btn-primary">저장</button>
       </div>
     </form>
@@ -1064,7 +1293,10 @@
           { id: makeId(), title: "협력기관 미팅",  categoryId: "external", date: dayOf(2), start: "14:00", end: "16:00", repeatDays: [],        memo: "" },
           { id: makeId(), title: "운동",           categoryId: "personal", date: dayOf(0), start: "17:30", end: "18:30", repeatDays: [1, 3, 5], memo: "" }
         ],
-        tasks: [],        // 5단계에서 사용
+        tasks: [
+          { id: makeId(), title: "디지털혁신포럼 부스 준비", status: "진행 중", progress: 30, nextAction: "부스 배치도 초안 만들기", dueDate: "2026-11-17" },
+          { id: makeId(), title: "예시 과제 B", status: "대기", progress: 0, nextAction: "착수 회의 일정 잡기", dueDate: toDateKey(addDays(new Date(), 30)) }
+        ],
         deadlines: [
           { id: makeId(), title: "제4회 문화체육관광 디지털혁신포럼", dueDate: "2026-11-17", done: false },
           { id: makeId(), title: "예시: 분기 실적 보고서 제출", dueDate: toDateKey(addDays(new Date(), 3)), done: false },
@@ -1127,7 +1359,16 @@
             repeatDays: Array.isArray(e.repeatDays) ? e.repeatDays.map(Number) : [],
             memo: typeof e.memo === "string" ? e.memo : ""
           })),
-        tasks: Array.isArray(raw.tasks) ? raw.tasks : [],
+        tasks: (Array.isArray(raw.tasks) ? raw.tasks : [])
+          .filter(t => t && typeof t.title === "string")
+          .map(t => ({
+            id: t.id || makeId(),
+            title: t.title,
+            status: ["진행 중", "대기", "보류", "완료"].includes(t.status) ? t.status : "대기",
+            progress: Math.min(100, Math.max(0, Number(t.progress) || 0)),
+            nextAction: typeof t.nextAction === "string" ? t.nextAction : "",
+            dueDate: isDate(t.dueDate) ? t.dueDate : ""
+          })),
         deadlines: Array.isArray(raw.deadlines) ? raw.deadlines : [],
         todayTodos: raw.todayTodos && typeof raw.todayTodos === "object" ? raw.todayTodos : {},
         links: Array.isArray(raw.links) ? raw.links : [],
@@ -1244,7 +1485,25 @@
       todoForm: document.getElementById("todoForm"),
       todoInput: document.getElementById("todoInput"),
       todoAddBtn: document.getElementById("todoAddBtn"),
-      todoRecord: document.getElementById("todoRecord")
+      todoRecord: document.getElementById("todoRecord"),
+      // [E] 진행 중인 과제
+      taskFilters: document.getElementById("taskFilters"),
+      taskAdd: document.getElementById("taskAdd"),
+      taskGrid: document.getElementById("taskGrid"),
+      taskEmpty: document.getElementById("taskEmpty"),
+      taskDoneNote: document.getElementById("taskDoneNote"),
+      tkDialog: document.getElementById("taskDialog"),
+      tkForm: document.getElementById("taskForm"),
+      tkDialogTitle: document.getElementById("taskDialogTitle"),
+      tkTitle: document.getElementById("tkTitle"),
+      tkStatus: document.getElementById("tkStatus"),
+      tkDue: document.getElementById("tkDue"),
+      tkProgress: document.getElementById("tkProgress"),
+      tkProgressValue: document.getElementById("tkProgressValue"),
+      tkNext: document.getElementById("tkNext"),
+      tkError: document.getElementById("tkError"),
+      tkDelete: document.getElementById("tkDelete"),
+      tkCancel: document.getElementById("tkCancel")
     };
 
     // 입력 창 바깥(어두운 부분)을 누르면 닫히게 하기
@@ -2018,10 +2277,235 @@
     });
 
     /* =========================================================
-       10. 1초마다 화면 갱신
+       10. [E] 진행 중인 과제
+       - 과제 카드: 과제명, 상태, 진행률 막대, 다음 할 일, 마감일
+       - 카드에서 −/+ 버튼으로 진행률을 10%씩 바로 조절
+       - 상태별 필터 (기본은 "완료"를 뺀 전체)
+       ========================================================= */
+    const TASK_STATUSES = ["진행 중", "대기", "보류", "완료"];
+
+    // 상태 이름 → CSS에서 쓸 짧은 이름 (색 구분용)
+    const STATUS_CLASS = { "진행 중": "active", "대기": "waiting", "보류": "hold", "완료": "done" };
+
+    let taskFilter = "전체";        // 지금 고른 필터 ("전체" = 완료 제외 모두)
+    let editingTaskId = null;       // 수정 중인 과제 id (새 과제면 null)
+    let taskDeleteArmed = false;    // 삭제 버튼을 한 번 눌렀는지
+
+    // 진행률을 0~100 사이, 10 단위로 맞추기
+    function clampProgress(value) {
+      return Math.min(100, Math.max(0, Math.round(Number(value) / 10) * 10 || 0));
+    }
+
+    // 과제 카드 하나 만들기
+    function createTaskCard(task, todayKey) {
+      const card = document.createElement("article");
+      card.className = `task-card is-${STATUS_CLASS[task.status] || "waiting"}`;
+
+      // ── 윗줄: 과제명(누르면 수정) + 상태 표시 ──
+      const top = document.createElement("div");
+      top.className = "task-top";
+      const title = document.createElement("button");
+      title.type = "button";
+      title.className = "task-title";
+      title.textContent = task.title;
+      title.addEventListener("click", () => openTaskDialog(task));
+      const status = document.createElement("span");
+      status.className = "task-status";
+      status.textContent = task.status;
+      top.append(title, status);
+
+      // ── 진행률: [−] 막대 [+] 40% ──
+      const progressRow = document.createElement("div");
+      progressRow.className = "task-progress";
+
+      const minus = document.createElement("button");
+      minus.type = "button";
+      minus.className = "step-btn";
+      minus.textContent = "−";
+      minus.setAttribute("aria-label", `${task.title} 진행률 10% 내리기`);
+      minus.disabled = task.progress <= 0;
+      minus.dataset.taskId = task.id;
+      minus.dataset.step = "-10";
+
+      const bar = document.createElement("div");
+      bar.className = "task-bar";
+      bar.setAttribute("role", "progressbar");
+      bar.setAttribute("aria-label", `${task.title} 진행률`);
+      bar.setAttribute("aria-valuemin", "0");
+      bar.setAttribute("aria-valuemax", "100");
+      bar.setAttribute("aria-valuenow", String(task.progress));
+      const fill = document.createElement("div");
+      fill.className = "task-bar-fill";
+      fill.style.width = task.progress + "%";
+      bar.append(fill);
+
+      const plus = document.createElement("button");
+      plus.type = "button";
+      plus.className = "step-btn";
+      plus.textContent = "+";
+      plus.setAttribute("aria-label", `${task.title} 진행률 10% 올리기`);
+      plus.disabled = task.progress >= 100;
+      plus.dataset.taskId = task.id;
+      plus.dataset.step = "10";
+
+      const percent = document.createElement("span");
+      percent.className = "task-percent num";
+      percent.textContent = task.progress + "%";
+
+      // −/+ 누르면 10%씩 바꾸고 바로 저장
+      function changeProgress(step) {
+        task.progress = clampProgress(task.progress + step);
+        saveData();
+        renderTasks();
+        // 다시 그린 뒤에도 같은 버튼에 포커스를 두어 키보드로 연달아 누를 수 있게
+        const again = el.taskGrid.querySelector(`[data-task-id="${task.id}"][data-step="${step}"]`);
+        if (again && !again.disabled) again.focus();
+      }
+      minus.addEventListener("click", () => changeProgress(-10));
+      plus.addEventListener("click", () => changeProgress(10));
+
+      progressRow.append(minus, bar, plus, percent);
+
+      // ── 다음 할 일 ──
+      const next = document.createElement("p");
+      next.className = "task-next";
+      const nextLabel = document.createElement("span");
+      nextLabel.className = "task-label";
+      nextLabel.textContent = "다음 할 일";
+      const nextText = document.createElement("span");
+      nextText.textContent = task.nextAction || "아직 정하지 않았어요";
+      if (!task.nextAction) nextText.className = "is-empty";
+      next.append(nextLabel, nextText);
+
+      card.append(top, progressRow, next);
+
+      // ── 마감일 (있을 때만) ──
+      if (task.dueDate) {
+        const due = fromDateKey(task.dueDate);
+        const dday = ddayInfo(daysUntil(task.dueDate, todayKey));
+        const dueEl = document.createElement("p");
+        dueEl.className = "task-due num" + (task.status !== "완료" ? ` is-${dday.level}` : "");
+        dueEl.textContent = `마감 ${due.getMonth() + 1}/${due.getDate()} (${DAY_NAMES[due.getDay()]}) · ${dday.text}`;
+        card.append(dueEl);
+      }
+      return card;
+    }
+
+    function renderTasks() {
+      const todayKey = toDateKey(new Date());
+
+      // 필터 버튼 모양 (고른 것만 눌린 상태로)
+      el.taskFilters.querySelectorAll("button").forEach(btn => {
+        btn.setAttribute("aria-pressed", String(btn.dataset.filter === taskFilter));
+      });
+
+      // 필터에 맞는 과제만 고르기
+      const shown = data.tasks.filter(t =>
+        taskFilter === "전체" ? t.status !== "완료" : t.status === taskFilter
+      );
+
+      // 정렬: 마감일이 가까운 순 (마감일 없는 과제는 뒤로)
+      shown.sort((a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999"));
+
+      el.taskGrid.textContent = "";
+      shown.forEach(task => el.taskGrid.append(createTaskCard(task, todayKey)));
+
+      // 비었을 때 안내
+      el.taskEmpty.hidden = shown.length > 0;
+      el.taskEmpty.textContent = taskFilter === "전체"
+        ? "진행 중인 과제가 없어요. ‘과제 추가’를 눌러 등록하세요."
+        : `‘${taskFilter}’ 상태인 과제가 없어요.`;
+
+      // 완료 개수 안내 (전체 보기에서 완료가 숨겨져 있음을 알려줌)
+      const doneCount = data.tasks.filter(t => t.status === "완료").length;
+      el.taskDoneNote.hidden = !(taskFilter === "전체" && doneCount > 0);
+      el.taskDoneNote.textContent = `완료한 과제 ${doneCount}개는 숨겨져 있어요.`;
+    }
+
+    // 필터 버튼
+    el.taskFilters.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-filter]");
+      if (!btn) return;
+      taskFilter = btn.dataset.filter;
+      renderTasks();
+    });
+
+    // 진행률 입력(슬라이더) 옆 숫자 표시
+    function updateTaskProgressLabel() {
+      el.tkProgressValue.textContent = el.tkProgress.value + "%";
+    }
+    el.tkProgress.addEventListener("input", updateTaskProgressLabel);
+
+    // 과제 추가/수정 창 열기
+    function openTaskDialog(task = null) {
+      editingTaskId = task ? task.id : null;
+      taskDeleteArmed = false;
+      el.tkDelete.textContent = "삭제";
+      el.tkError.hidden = true;
+
+      el.tkDialogTitle.textContent = task ? "과제 수정" : "과제 추가";
+      el.tkTitle.value = task ? task.title : "";
+      el.tkStatus.value = task ? task.status : "진행 중";
+      el.tkProgress.value = task ? task.progress : 0;
+      el.tkNext.value = task ? task.nextAction : "";
+      el.tkDue.value = task ? task.dueDate : "";
+      el.tkDelete.hidden = !task;
+      updateTaskProgressLabel();
+
+      el.tkDialog.showModal();
+      el.tkTitle.focus();
+    }
+
+    el.tkForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const title = el.tkTitle.value.trim();
+      if (!title) {
+        el.tkError.textContent = "과제명을 입력해 주세요.";
+        el.tkError.hidden = false;
+        el.tkTitle.focus();
+        return;
+      }
+      const values = {
+        title,
+        status: el.tkStatus.value,
+        progress: clampProgress(el.tkProgress.value),
+        nextAction: el.tkNext.value.trim(),
+        dueDate: el.tkDue.value   // 비워 두면 마감일 없음
+      };
+
+      if (editingTaskId) {
+        const target = data.tasks.find(t => t.id === editingTaskId);
+        if (target) Object.assign(target, values);
+      } else {
+        data.tasks.push({ id: makeId(), ...values });
+      }
+      if (saveData()) showToast(editingTaskId ? "과제를 고쳤어요." : "과제를 추가했어요.");
+      el.tkDialog.close();
+      renderTasks();
+    });
+
+    // 삭제: 두 번 눌러야 삭제
+    el.tkDelete.addEventListener("click", () => {
+      if (!taskDeleteArmed) {
+        taskDeleteArmed = true;
+        el.tkDelete.textContent = "한 번 더 누르면 삭제";
+        return;
+      }
+      data.tasks = data.tasks.filter(t => t.id !== editingTaskId);
+      if (saveData()) showToast("과제를 삭제했어요.");
+      el.tkDialog.close();
+      renderTasks();
+    });
+
+    el.tkCancel.addEventListener("click", () => el.tkDialog.close());
+    el.taskAdd.addEventListener("click", () => openTaskDialog());
+    closeOnBackdrop(el.tkDialog);
+
+    /* =========================================================
+       11. 1초마다 화면 갱신
        - 시계·카운트다운: 매초
        - 현재 시각 선: 분이 바뀔 때만
-       - 날짜가 바뀌면: 타임라인(오늘 강조), 마감 D-day, 오늘 할 일(새 목록)
+       - 날짜가 바뀌면: 타임라인(오늘 강조), 마감 D-day, 오늘 할 일(새 목록), 과제 D-day
        ========================================================= */
     let lastMinute = -1;
     let lastDateKey = toDateKey(new Date());
@@ -2037,6 +2521,7 @@
         renderTimeline();
         renderDeadlines();
         renderTodos();
+        renderTasks();
       } else if (now.getMinutes() !== lastMinute) {
         renderNowLine(now);
       }
@@ -2047,6 +2532,7 @@
     renderTimeline();
     renderDeadlines();
     renderTodos();
+    renderTasks();
     tick();                     // 시계도 바로 한 번 그리기
     setInterval(tick, 1000);    // 그 다음부터 1초마다 다시 그리기
   </script>

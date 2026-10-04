@@ -7,7 +7,7 @@
    - 데이터는 여기서 다루지 않아요. (데이터는 브라우저 저장소와 Firestore가 담당)
    - 보관 내용을 바꿨다면 아래 CACHE 이름의 숫자를 올려 주세요.
    ========================================================= */
-const CACHE = "command-center-v2";
+const CACHE = "command-center-v3";
 const APP_FILES = [
   "./",
   "./index.html",
@@ -49,17 +49,9 @@ self.addEventListener("fetch", (event) => {
   // 이 사이트의 파일만 다룸 (구글 로그인, Firestore, 구글 캘린더 요청은 건드리지 않음)
   if (url.origin !== self.location.origin) return;
 
-  // 화면(페이지): 인터넷 먼저 → 실패하면 보관본
+  // 화면(페이지): 인터넷 먼저 → 3초 안에 안 오거나 실패하면 보관본
   if (request.mode === "navigate" || url.pathname.endsWith(".html")) {
-    event.respondWith(
-      fetch(request)
-        .then(response => {
-          const copy = response.clone();
-          caches.open(CACHE).then(cache => cache.put("./index.html", copy));
-          return response;
-        })
-        .catch(() => caches.match("./index.html"))
-    );
+    event.respondWith(networkFirst(request));
     return;
   }
 
@@ -67,6 +59,7 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(cacheFirst(request));
 });
 
+// 보관본 먼저, 없으면 받아서 보관 (정상 응답만 보관)
 async function cacheFirst(request) {
   const cached = await caches.match(request);
   if (cached) return cached;
@@ -76,4 +69,29 @@ async function cacheFirst(request) {
     cache.put(request, response.clone());
   }
   return response;
+}
+
+// 인터넷 먼저 (화면 파일용)
+// - 정상 응답(200)만 보관 → 404·서버 오류 페이지가 앱 화면으로 저장되지 않게
+// - 느린 인터넷에서 3초가 지나면 보관본을 먼저 보여줌 (보관본이 없으면 계속 기다림)
+async function networkFirst(request) {
+  const network = fetch(request).then(response => {
+    if (response.ok) {
+      const copy = response.clone();
+      caches.open(CACHE).then(cache => cache.put("./index.html", copy));
+    }
+    return response;
+  });
+  const timeout = new Promise(resolve => setTimeout(resolve, 3000));
+  try {
+    const first = await Promise.race([network, timeout]);
+    if (first && first.ok) return first;
+    const cached = await caches.match("./index.html");
+    if (cached) return cached;
+    return first || await network;   // 보관본이 없으면 인터넷 응답을 그대로 사용
+  } catch (err) {
+    const cached = await caches.match("./index.html");
+    if (cached) return cached;
+    throw err;
+  }
 }

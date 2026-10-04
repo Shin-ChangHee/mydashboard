@@ -7,11 +7,12 @@
    - 데이터는 여기서 다루지 않아요. (데이터는 브라우저 저장소와 Firestore가 담당)
    - 보관 내용을 바꿨다면 아래 CACHE 이름의 숫자를 올려 주세요.
    ========================================================= */
-const CACHE = "command-center-v1";
+const CACHE = "command-center-v2";
 const APP_FILES = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
+  "./fonts/pretendard/pretendardvariable-dynamic-subset.css",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/icon-180.png"

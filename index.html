@@ -19,7 +19,7 @@
       - 색: 맨 위 :root 의 --bg, --scoreboard 같은 값을 바꾸면 전체에 반영
       - 타임라인 1시간 높이: --hour-h (큰 화면에서는 자동으로 맞춰짐)
       - 데이터는 브라우저 localStorage 의 "commandCenter.data" 에 저장
-      - 외부 서버·CDN·외부 폰트를 쓰지 않음 (인터넷 없이 동작)
+      - 외부 서버·CDN·외부 폰트를 쓰지 않음 (인터넷 없이 동작, 글꼴은 fonts 폴더에 포함)
         단, 설정에서 "구글 캘린더 연동"을 켠 경우에만 구글 서버와 통신 (GOOGLE_SETUP.md 참고)
         그리고 클라우드 동기화(Firebase)에 로그인한 경우에만 Firebase와 통신 (FIREBASE_SETUP.md 참고)
     ============================================================
@@ -35,6 +35,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="커맨드센터">
   <title>업무 커맨드센터</title>
+  <!-- 글꼴: Pretendard (저장소 fonts 폴더에 들어 있음. 외부 서버에서 받지 않음, SIL OFL 라이선스)
+       화면에 쓰인 글자 묶음만 골라 받는 방식이라 가볍습니다. -->
+  <link rel="stylesheet" href="fonts/pretendard/pretendardvariable-dynamic-subset.css">
 
   <style>
     /* =========================================================
@@ -64,7 +67,9 @@
       --cat-personal: #E58C78;  /* 개인(운동 등) */
 
       /* 글꼴: 외부에서 불러오지 않고 PC에 설치된 글꼴을 순서대로 사용 */
-      --font: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+      /* 글꼴: Pretendard를 먼저 쓰고, 못 불러오면 PC에 있는 글꼴로 */
+      --font: "Pretendard Variable", "Pretendard", -apple-system, BlinkMacSystemFont,
+              "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
 
       /* 간격 */
       --gap: 1px;        /* 영역 사이 구분선 두께 (배경색이 선처럼 보이게) */
@@ -87,6 +92,8 @@
       font-family: var(--font);
       font-size: 15px;
       line-height: 1.5;
+      letter-spacing: -0.01em;              /* 한글이 너무 벌어져 보이지 않게 살짝 좁힘 */
+      -webkit-font-smoothing: antialiased;  /* 어두운 배경에서 글자를 더 또렷하게 (맥) */
       min-height: 100vh;
     }
 
@@ -360,7 +367,7 @@
 
     /* =========================================================
        6. [B] 이번 주 타임라인
-       - 왼쪽에 시간 눈금, 오른쪽에 월~금 5개 열
+       - 왼쪽에 시간 눈금, 오른쪽에 월~일 7개 열
        - 일정 블록은 각 요일 열 안에 "절대 위치"로 올려놓습니다.
          (위에서 몇 px, 높이 몇 px인지 JavaScript가 계산)
        ========================================================= */
@@ -403,17 +410,17 @@
       overflow-x: auto;
     }
 
-    /* 타임라인 격자: [시간 눈금 열] + [요일 5열] (휴대폰에서는 1열, JavaScript가 열 수를 정함) */
+    /* 타임라인 격자: [시간 눈금 열] + [요일 7열] (휴대폰에서는 1열, JavaScript가 열 수를 정함) */
     .tl-grid {
       display: grid;
-      grid-template-columns: 44px repeat(5, minmax(0, 1fr));
-      min-width: 520px;
+      grid-template-columns: 44px repeat(7, minmax(0, 1fr));
+      min-width: 660px;
     }
 
     /* 휴대폰: 요일 고르기 버튼 줄 */
     .tl-daytabs {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(7, 1fr);
       gap: 4px;
     }
     .tl-daytab {
@@ -448,6 +455,9 @@
       align-items: baseline;
       gap: 6px;
     }
+    /* 주말 요일 이름: 토요일 파랑, 일요일 빨강 (달력 관례) */
+    .tl-dayhead.is-sat .day-name, .tl-daytab.is-sat strong { color: var(--cat-meeting); }
+    .tl-dayhead.is-sun .day-name, .tl-daytab.is-sun strong { color: var(--danger); }
     .tl-dayhead .day-name {
       color: var(--text);
       font-weight: 600;
@@ -981,7 +991,7 @@
       gap: 12px;
     }
 
-    /* 반복 요일 선택 (월~금 체크 버튼) */
+    /* 반복 요일 선택 (월~일 체크 버튼) */
     .repeat-days {
       border: 0;
       margin: 0;
@@ -1384,6 +1394,8 @@
           <label class="day-check"><input type="checkbox" value="3" id="evRepeat3"><span>수</span></label>
           <label class="day-check"><input type="checkbox" value="4" id="evRepeat4"><span>목</span></label>
           <label class="day-check"><input type="checkbox" value="5" id="evRepeat5"><span>금</span></label>
+          <label class="day-check"><input type="checkbox" value="6" id="evRepeat6"><span>토</span></label>
+          <label class="day-check"><input type="checkbox" value="0" id="evRepeat0"><span>일</span></label>
         </div>
         <p class="form-hint" id="evRepeatHint" hidden>반복 일정은 고친 내용이 모든 주에 함께 적용돼요.</p>
       </fieldset>
@@ -1693,6 +1705,13 @@
 
   <script>
     const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
+    const WEEK = [0, 1, 2, 3, 4, 5, 6];   // 월요일부터 며칠째인지 (0=월 … 6=일)
+
+    // 토요일·일요일이면 색 구분용 이름표 붙이기
+    function weekendClass(date) {
+      const day = date.getDay();
+      return day === 6 ? " is-sat" : day === 0 ? " is-sun" : "";
+    }
 
     /* =========================================================
        1. 작은 도우미 함수들
@@ -1740,13 +1759,8 @@
       return addDays(date, diff);
     }
 
-    // 대시보드가 기본으로 보여줄 주의 월요일
-    // - 평일: 이번 주
-    // - 토·일: 곧 시작할 다음 주 (주말에 지난 주를 볼 일은 적으니까)
+    // 대시보드가 기본으로 보여줄 주의 월요일 (월~일이 한 주, 주말에도 이번 주)
     function getDefaultMonday(today) {
-      const day = today.getDay();
-      if (day === 6) return addDays(today, 2);
-      if (day === 0) return addDays(today, 1);
       return getMonday(today);
     }
 
@@ -1789,7 +1803,7 @@
           { id: "personal", name: "개인(운동 등)", color: "#E58C78" }
         ],
         events: [
-          // repeatDays: 비어 있으면 1회성, [1,3,5]면 월·수·금 매주 반복 (1=월 … 5=금)
+          // repeatDays: 비어 있으면 1회성, [1,3,5]면 월·수·금 매주 반복 (1=월 … 6=토, 0=일)
           { id: makeId(), title: "주간 팀 회의",   categoryId: "meeting",  date: dayOf(0), start: "10:00", end: "11:00", repeatDays: [1],       memo: "" },
           { id: makeId(), title: "결재 문서 검토", categoryId: "admin",    date: dayOf(0), start: "10:30", end: "11:30", repeatDays: [],        memo: "" },
           { id: makeId(), title: "집중 업무 블록", categoryId: "focus",    date: dayOf(1), start: "09:00", end: "11:30", repeatDays: [2, 4],    memo: "" },
@@ -2297,19 +2311,19 @@
     const mobileQuery = window.matchMedia("(max-width: 640px)");
     function isMobile() { return mobileQuery.matches; }
 
-    // 휴대폰에서 보고 있는 요일 (0=월 … 4=금)
+    // 휴대폰에서 보고 있는 요일 (0=월 … 6=일)
     function defaultDayIndex() {
       const today = new Date();
       const index = Math.round((fromDateKey(toDateKey(today)) - viewMonday) / 86400000);
-      return index >= 0 && index <= 4 ? index : 0;
+      return index >= 0 && index <= 6 ? index : 0;
     }
     let mobileDay = defaultDayIndex();
 
-    // 하루 앞/뒤로 (금요일 다음은 다음 주 월요일)
+    // 하루 앞/뒤로 (일요일 다음은 다음 주 월요일)
     function shiftMobileDay(step) {
       mobileDay += step;
-      if (mobileDay > 4) { viewMonday = addDays(viewMonday, 7); mobileDay = 0; }
-      if (mobileDay < 0) { viewMonday = addDays(viewMonday, -7); mobileDay = 4; }
+      if (mobileDay > 6) { viewMonday = addDays(viewMonday, 7); mobileDay = 0; }
+      if (mobileDay < 0) { viewMonday = addDays(viewMonday, -7); mobileDay = 6; }
       renderTimeline();
     }
 
@@ -2318,11 +2332,11 @@
       el.tlDayTabs.hidden = !isMobile();
       if (!isMobile()) return;
       el.tlDayTabs.textContent = "";
-      [0, 1, 2, 3, 4].forEach(i => {
+      WEEK.forEach(i => {
         const date = addDays(viewMonday, i);
         const tab = document.createElement("button");
         tab.type = "button";
-        tab.className = "tl-daytab num";
+        tab.className = "tl-daytab num" + weekendClass(date);
         if (toDateKey(date) === todayKey) tab.classList.add("is-today");
         tab.setAttribute("aria-pressed", String(i === mobileDay));
         const name = document.createElement("strong");
@@ -2475,11 +2489,11 @@
       const grid = el.tlGrid;
       grid.textContent = "";  // 이전 내용 지우기
 
-      // 월~금 5일의 날짜 목록
+      // 월~일 7일의 날짜 목록
       // (휴대폰에서는 고른 하루만)
       const days = isMobile()
         ? [addDays(viewMonday, mobileDay)]
-        : [0, 1, 2, 3, 4].map(i => addDays(viewMonday, i));
+        : WEEK.map(i => addDays(viewMonday, i));
       grid.style.gridTemplateColumns = `44px repeat(${days.length}, minmax(0, 1fr))`;
       renderDayTabs(todayKey);
 
@@ -2490,7 +2504,7 @@
 
       days.forEach(date => {
         const head = document.createElement("div");
-        head.className = "tl-dayhead num";
+        head.className = "tl-dayhead num" + weekendClass(date);
         const name = document.createElement("span");
         name.className = "day-name";
         name.textContent = DAY_NAMES[date.getDay()];
@@ -2587,9 +2601,9 @@
       });
 
       // ── 제목 옆 날짜 범위, 빈 주 안내, 이번 주 버튼 상태 ──
-      const friday = addDays(viewMonday, 4);
+      const sunday = addDays(viewMonday, 6);
       el.tlRange.textContent =
-        `${viewMonday.getMonth() + 1}월 ${viewMonday.getDate()}일 – ${friday.getMonth() + 1}월 ${friday.getDate()}일`;
+        `${viewMonday.getMonth() + 1}월 ${viewMonday.getDate()}일 – ${sunday.getMonth() + 1}월 ${sunday.getDate()}일`;
       el.tlEmpty.hidden = eventCount > 0 || hasAllDay;
       const isDefaultWeek = toDateKey(viewMonday) === toDateKey(getDefaultMonday(today));
       el.tlThis.setAttribute("aria-pressed", String(isDefaultWeek));
@@ -2829,7 +2843,7 @@
     el.tlAdd.addEventListener("click", () => {
       const now = new Date();
       const todayKey = toDateKey(now);
-      const weekKeys = [0, 1, 2, 3, 4].map(i => toDateKey(addDays(viewMonday, i)));
+      const weekKeys = WEEK.map(i => toDateKey(addDays(viewMonday, i)));
       const tlStart = timeToMinutes(data.settings.timelineStart);
       const tlEnd = timeToMinutes(data.settings.timelineEnd);
       // 다음 정각 (타임라인 범위 안으로)
@@ -3931,9 +3945,9 @@
           gcal.calendars = (list.items || []).filter(c => c.selected || c.primary);
         }
 
-        // 월요일 0시 ~ 토요일 0시 사이 일정
+        // 월요일 0시 ~ 다음 주 월요일 0시 사이 일정
         const timeMin = monday.toISOString();
-        const timeMax = addDays(monday, 5).toISOString();
+        const timeMax = addDays(monday, 7).toISOString();
         const results = await Promise.all(gcal.calendars.map(cal =>
           googleGet(`/calendars/${encodeURIComponent(cal.id)}/events`, {
             timeMin, timeMax, singleEvents: "true", orderBy: "startTime", maxResults: "250"

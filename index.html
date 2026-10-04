@@ -438,6 +438,161 @@
     .btn-danger:hover { background: rgba(238, 108, 106, 0.12); }
 
     /* =========================================================
+       [C] 다가오는 마감 · [D] 오늘 할 일 공통
+       ========================================================= */
+    .panel {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .panel-head h2 { margin: 0; }
+    .panel-count {
+      font-size: 14px;
+      color: var(--text-sub);
+    }
+    .btn-small { padding: 4px 10px; font-size: 13px; }
+
+    .empty-text {
+      color: var(--text-sub);
+      font-size: 14px;
+      margin: 0;
+    }
+
+    /* 체크박스: 다크 화면에 맞게 크기·색 조정 */
+    .check {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+      accent-color: var(--text-sub);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    /* ---------- [C] 마감 목록 ---------- */
+    .dl-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    /* 한 줄: [체크] [D-day] [제목] [날짜] */
+    .dl-item {
+      display: grid;
+      grid-template-columns: auto 64px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .dl-item:last-child { border-bottom: 0; }
+
+    .dl-dday {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    /* D-day 색상 규칙 */
+    .dl-item.is-danger .dl-dday { color: var(--danger); }
+    .dl-item.is-warn .dl-dday   { color: var(--warn); }
+    .dl-item.is-past .dl-dday,
+    .dl-item.is-done .dl-dday   { color: var(--text-sub); font-weight: 500; }
+
+    .dl-title {
+      background: none;
+      border: 0;
+      padding: 2px 0;
+      text-align: left;
+      font: inherit;
+      color: var(--text);
+      cursor: pointer;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .dl-title:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .dl-item.is-done .dl-title {
+      color: var(--text-sub);
+      text-decoration: line-through;
+    }
+    .dl-date {
+      font-size: 13px;
+      color: var(--text-sub);
+    }
+
+    /* 접히는 목록 (지난 마감, 완료한 마감) */
+    .fold summary {
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text-sub);
+      padding: 4px 0;
+    }
+    .fold summary:hover { color: var(--text); }
+    .fold + .fold { margin-top: -4px; }
+
+    /* ---------- [D] 오늘 할 일 ---------- */
+    .todo-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .todo-list:empty { display: none; }
+    .todo-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .todo-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 0;
+      padding: 6px 0;
+      cursor: pointer;
+    }
+    .todo-text {
+      overflow-wrap: anywhere;
+    }
+    /* 체크하면 취소선 */
+    .todo-item.is-done .todo-text {
+      text-decoration: line-through;
+      color: var(--text-sub);
+    }
+
+    /* 작은 × 지우기 버튼 */
+    .icon-btn {
+      background: none;
+      border: 0;
+      color: var(--text-sub);
+      font-size: 18px;
+      line-height: 1;
+      width: 28px;
+      height: 28px;
+      border-radius: 4px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .icon-btn:hover { color: var(--text); background: var(--line); }
+
+    .todo-form {
+      display: flex;
+      gap: 8px;
+    }
+    .todo-form .input { flex: 1; min-width: 0; }
+    .input:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* =========================================================
        입력 창(모달): 일정 추가/수정
        - <dialog>를 사용하면 Esc 닫기, 포커스 가두기가 기본으로 됩니다.
        ========================================================= */
@@ -663,16 +818,30 @@
 
     <!-- 오른쪽 열 -->
     <div class="side">
-      <!-- [C] 다가오는 마감 (4단계에서 구현) -->
-      <section class="area" aria-labelledby="deadlineTitle">
-        <h2 id="deadlineTitle">다가오는 마감</h2>
-        <p class="placeholder">마감일과 D-day가 들어올 자리예요. (4단계)</p>
+      <!-- [C] 다가오는 마감 -->
+      <section class="area panel" aria-labelledby="deadlineTitle">
+        <div class="panel-head">
+          <h2 id="deadlineTitle">다가오는 마감</h2>
+          <button type="button" class="btn btn-small" id="dlAdd">마감 추가</button>
+        </div>
+        <!-- 마감 목록은 JavaScript가 채웁니다 (renderDeadlines 함수) -->
+        <div id="dlBody"></div>
       </section>
 
-      <!-- [D] 오늘 할 일 3가지 (4단계에서 구현) -->
-      <section class="area" aria-labelledby="todoTitle">
-        <h2 id="todoTitle">오늘 할 일 3가지</h2>
-        <p class="placeholder">오늘 꼭 할 일 3개를 적는 자리예요. (4단계)</p>
+      <!-- [D] 오늘 할 일 3가지 -->
+      <section class="area panel" aria-labelledby="todoTitle">
+        <div class="panel-head">
+          <h2 id="todoTitle">오늘 할 일 3가지</h2>
+          <span class="panel-count num" id="todoCount">0/3</span>
+        </div>
+        <p class="empty-text" id="todoEmpty">오늘 꼭 끝낼 일 3가지를 적어 보세요.</p>
+        <ul class="todo-list" id="todoList"></ul>
+        <form class="todo-form" id="todoForm">
+          <input class="input" type="text" id="todoInput" maxlength="60" autocomplete="off"
+                 placeholder="오늘 꼭 끝낼 일" aria-label="할 일 입력">
+          <button type="submit" class="btn" id="todoAddBtn">추가</button>
+        </form>
+        <p class="form-hint" id="todoRecord" hidden></p>
       </section>
     </div>
 
@@ -756,6 +925,34 @@
         <button type="button" class="btn btn-danger" id="evDelete">삭제</button>
         <span class="spacer"></span>
         <button type="button" class="btn" id="evCancel">취소</button>
+        <button type="submit" class="btn btn-primary">저장</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ===================================================
+       마감 추가/수정 입력 창
+       =================================================== -->
+  <dialog class="dialog" id="deadlineDialog" aria-labelledby="deadlineDialogTitle">
+    <form class="dialog-form" id="deadlineForm" novalidate>
+      <h2 id="deadlineDialogTitle">마감 추가</h2>
+
+      <label class="field">
+        <span class="field-label">마감 이름</span>
+        <input class="input" type="text" id="dlTitle" maxlength="60" autocomplete="off" placeholder="예: 분기 실적 보고서 제출">
+      </label>
+
+      <label class="field">
+        <span class="field-label">마감일</span>
+        <input class="input num" type="date" id="dlDate">
+      </label>
+
+      <p class="form-error" id="dlError" role="alert" hidden></p>
+
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-danger" id="dlDelete">삭제</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" id="dlCancel">취소</button>
         <button type="submit" class="btn btn-primary">저장</button>
       </div>
     </form>
@@ -868,8 +1065,12 @@
           { id: makeId(), title: "운동",           categoryId: "personal", date: dayOf(0), start: "17:30", end: "18:30", repeatDays: [1, 3, 5], memo: "" }
         ],
         tasks: [],        // 5단계에서 사용
-        deadlines: [],    // 4단계에서 사용
-        todayTodos: {},   // 4단계에서 사용
+        deadlines: [
+          { id: makeId(), title: "제4회 문화체육관광 디지털혁신포럼", dueDate: "2026-11-17", done: false },
+          { id: makeId(), title: "예시: 분기 실적 보고서 제출", dueDate: toDateKey(addDays(new Date(), 3)), done: false },
+          { id: makeId(), title: "예시: 용역 계약 검토", dueDate: toDateKey(addDays(new Date(), 12)), done: false }
+        ],
+        todayTodos: {},   // { "2026-10-06": [ { text, done } ] } 날짜별 목록
         links: []         // 6단계에서 사용
       };
     }
@@ -888,6 +1089,20 @@
       if (raw.version === CURRENT_VERSION) return raw;
       // 예시) if (raw.version === 1) { ...바꾸기...; raw.version = 2; }
       return null;  // 알 수 없는 버전
+    }
+
+    // 단계별로 새 기능이 생길 때, 그 영역이 비어 있으면 샘플을 한 번만 채워 줌
+    // - seeded 목록에 이름이 있으면 "이미 샘플을 넣은 적 있음" → 다시 넣지 않음
+    //   (사용자가 일부러 다 지운 목록에 샘플이 되살아나지 않게)
+    function fillNewSamples(target) {
+      const sample = createSampleData();
+      ["events", "deadlines", "tasks", "links"].forEach(key => {
+        if (target.seeded.includes(key)) return;
+        if (sample[key].length === 0) return;   // 아직 샘플이 없는 영역은 다음 단계에서
+        if (target[key].length === 0) target[key] = sample[key];
+        target.seeded.push(key);
+      });
+      return target;
     }
 
     // 불러온 데이터에 빠진 칸이 있으면 기본값으로 채우고, 이상한 일정은 걸러냄
@@ -915,7 +1130,8 @@
         tasks: Array.isArray(raw.tasks) ? raw.tasks : [],
         deadlines: Array.isArray(raw.deadlines) ? raw.deadlines : [],
         todayTodos: raw.todayTodos && typeof raw.todayTodos === "object" ? raw.todayTodos : {},
-        links: Array.isArray(raw.links) ? raw.links : []
+        links: Array.isArray(raw.links) ? raw.links : [],
+        seeded: Array.isArray(raw.seeded) ? raw.seeded : []
       };
     }
 
@@ -931,7 +1147,7 @@
 
       // 처음 열었을 때: 샘플 데이터로 시작하고 바로 저장
       if (!text) {
-        const sample = createSampleData();
+        const sample = fillNewSamples({ ...createSampleData(), seeded: [] });
         saveData(sample, true);
         return sample;
       }
@@ -939,7 +1155,9 @@
       try {
         const migrated = migrate(JSON.parse(text));
         if (!migrated) throw new Error("알 수 없는 데이터 버전");
-        return normalizeData(migrated);
+        const loaded = fillNewSamples(normalizeData(migrated));
+        saveData(loaded, true);
+        return loaded;
       } catch (err) {
         // 데이터가 깨져 있으면 원래 내용을 따로 보관해 두고 샘플로 시작
         console.warn("저장된 데이터가 깨져 있어요:", err);
@@ -1007,8 +1225,35 @@
       evMemo: document.getElementById("evMemo"),
       evError: document.getElementById("evError"),
       evDelete: document.getElementById("evDelete"),
-      evCancel: document.getElementById("evCancel")
+      evCancel: document.getElementById("evCancel"),
+      // [C] 다가오는 마감
+      dlBody: document.getElementById("dlBody"),
+      dlAdd: document.getElementById("dlAdd"),
+      dlDialog: document.getElementById("deadlineDialog"),
+      dlForm: document.getElementById("deadlineForm"),
+      dlDialogTitle: document.getElementById("deadlineDialogTitle"),
+      dlTitle: document.getElementById("dlTitle"),
+      dlDate: document.getElementById("dlDate"),
+      dlError: document.getElementById("dlError"),
+      dlDelete: document.getElementById("dlDelete"),
+      dlCancel: document.getElementById("dlCancel"),
+      // [D] 오늘 할 일
+      todoCount: document.getElementById("todoCount"),
+      todoEmpty: document.getElementById("todoEmpty"),
+      todoList: document.getElementById("todoList"),
+      todoForm: document.getElementById("todoForm"),
+      todoInput: document.getElementById("todoInput"),
+      todoAddBtn: document.getElementById("todoAddBtn"),
+      todoRecord: document.getElementById("todoRecord")
     };
+
+    // 입력 창 바깥(어두운 부분)을 누르면 닫히게 하기
+    // (Esc 키로 닫기는 <dialog>가 기본으로 해줌)
+    function closeOnBackdrop(dialog) {
+      dialog.addEventListener("click", (e) => {
+        if (e.target === dialog) dialog.close();
+      });
+    }
 
     /* =========================================================
        4. [A] 날짜와 시계 그리기
@@ -1476,11 +1721,7 @@
     el.evCancel.addEventListener("click", closeEventDialog);
     el.evRepeat.addEventListener("change", updateRepeatLabel);
 
-    // 창 바깥(어두운 부분)을 누르면 닫기
-    // (Esc 키로 닫기는 <dialog>가 기본으로 해줌)
-    el.evDialog.addEventListener("click", (e) => {
-      if (e.target === el.evDialog) closeEventDialog();
-    });
+    closeOnBackdrop(el.evDialog);
 
     // 위쪽 "일정 추가" 버튼: 보고 있는 주에 오늘이 있으면 오늘, 없으면 그 주 월요일
     el.tlAdd.addEventListener("click", () => {
@@ -1500,10 +1741,287 @@
     });
 
     /* =========================================================
-       8. 1초마다 화면 갱신
+       8. [C] 다가오는 마감
+       - 마감일이 가까운 순서로 보여줌
+       - D-3 이내 빨강, D-7 이내 주황, 당일은 "D-DAY"
+       - 지난 마감·완료한 마감은 아래에 접어서 보관
+       ========================================================= */
+    let editingDeadlineId = null;     // 수정 중인 마감 id (새 마감이면 null)
+    let deadlineDeleteArmed = false;  // 삭제 버튼을 한 번 눌렀는지
+
+    // 접힌 목록을 펼쳐 두었는지 기억 (다시 그려도 그대로 유지되게)
+    const foldOpen = { past: false, done: false };
+
+    // 오늘부터 마감일까지 며칠 남았는지 (오늘=0, 내일=1, 어제=-1)
+    function daysUntil(dueKey, todayKey) {
+      const diff = fromDateKey(dueKey) - fromDateKey(todayKey);
+      return Math.round(diff / (24 * 60 * 60 * 1000));  // 서머타임 오차 방지용 반올림
+    }
+
+    // D-day 글자와 색 단계 정하기
+    function ddayInfo(days) {
+      if (days === 0) return { text: "D-DAY", level: "danger" };
+      if (days < 0) return { text: `D+${-days}`, level: "past" };
+      if (days <= 3) return { text: `D-${days}`, level: "danger" };
+      if (days <= 7) return { text: `D-${days}`, level: "warn" };
+      return { text: `D-${days}`, level: "normal" };
+    }
+
+    // 마감 한 줄 만들기
+    function createDeadlineItem(deadline, todayKey) {
+      const days = daysUntil(deadline.dueDate, todayKey);
+      const dday = ddayInfo(days);
+      const due = fromDateKey(deadline.dueDate);
+
+      const li = document.createElement("li");
+      li.className = `dl-item is-${deadline.done ? "done" : dday.level}`;
+
+      // 완료 체크
+      const check = document.createElement("input");
+      check.type = "checkbox";
+      check.className = "check";
+      check.checked = deadline.done;
+      check.setAttribute("aria-label", `${deadline.title} 완료`);
+      check.addEventListener("change", () => {
+        deadline.done = check.checked;
+        if (saveData()) showToast(check.checked ? "완료 목록으로 옮겼어요." : "다시 마감 목록으로 돌려놨어요.");
+        renderDeadlines();
+      });
+
+      const ddayEl = document.createElement("span");
+      ddayEl.className = "dl-dday num";
+      ddayEl.textContent = dday.text;
+
+      // 제목을 누르면 수정 창
+      const title = document.createElement("button");
+      title.type = "button";
+      title.className = "dl-title";
+      title.textContent = deadline.title;
+      title.addEventListener("click", () => openDeadlineDialog(deadline));
+
+      const date = document.createElement("span");
+      date.className = "dl-date num";
+      date.textContent = `${due.getMonth() + 1}/${due.getDate()} (${DAY_NAMES[due.getDay()]})`;
+
+      li.append(check, ddayEl, title, date);
+      return li;
+    }
+
+    // 접히는 목록 (지난 마감, 완료한 마감)
+    function createFold(key, label, items, todayKey) {
+      const details = document.createElement("details");
+      details.className = "fold";
+      details.open = foldOpen[key];
+      details.addEventListener("toggle", () => { foldOpen[key] = details.open; });
+
+      const summary = document.createElement("summary");
+      summary.textContent = `${label} ${items.length}건`;
+      const list = document.createElement("ul");
+      list.className = "dl-list";
+      items.forEach(d => list.append(createDeadlineItem(d, todayKey)));
+
+      details.append(summary, list);
+      return details;
+    }
+
+    function renderDeadlines() {
+      const todayKey = toDateKey(new Date());
+      const byDate = (a, b) => a.dueDate.localeCompare(b.dueDate);
+
+      // 세 묶음으로 나누기
+      const upcoming = data.deadlines.filter(d => !d.done && d.dueDate >= todayKey).sort(byDate);
+      const past = data.deadlines.filter(d => !d.done && d.dueDate < todayKey).sort(byDate).reverse();
+      const done = data.deadlines.filter(d => d.done).sort(byDate).reverse();
+
+      const box = el.dlBody;
+      box.textContent = "";
+
+      if (upcoming.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "empty-text";
+        empty.textContent = "다가오는 마감이 없어요. ‘마감 추가’를 눌러 등록하세요.";
+        box.append(empty);
+      } else {
+        const list = document.createElement("ul");
+        list.className = "dl-list";
+        upcoming.forEach(d => list.append(createDeadlineItem(d, todayKey)));
+        box.append(list);
+      }
+
+      if (past.length) box.append(createFold("past", "지난 마감", past, todayKey));
+      if (done.length) box.append(createFold("done", "완료한 마감", done, todayKey));
+    }
+
+    // 마감 추가/수정 창 열기
+    function openDeadlineDialog(deadline = null) {
+      editingDeadlineId = deadline ? deadline.id : null;
+      deadlineDeleteArmed = false;
+      el.dlDelete.textContent = "삭제";
+      el.dlError.hidden = true;
+
+      el.dlDialogTitle.textContent = deadline ? "마감 수정" : "마감 추가";
+      el.dlTitle.value = deadline ? deadline.title : "";
+      el.dlDate.value = deadline ? deadline.dueDate : toDateKey(addDays(new Date(), 7));
+      el.dlDelete.hidden = !deadline;
+
+      el.dlDialog.showModal();
+      el.dlTitle.focus();
+    }
+
+    el.dlForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const title = el.dlTitle.value.trim();
+      if (!title) {
+        el.dlError.textContent = "마감 이름을 입력해 주세요.";
+        el.dlError.hidden = false;
+        el.dlTitle.focus();
+        return;
+      }
+      if (!el.dlDate.value) {
+        el.dlError.textContent = "마감일을 골라 주세요.";
+        el.dlError.hidden = false;
+        el.dlDate.focus();
+        return;
+      }
+
+      if (editingDeadlineId) {
+        const target = data.deadlines.find(d => d.id === editingDeadlineId);
+        if (target) Object.assign(target, { title, dueDate: el.dlDate.value });
+      } else {
+        data.deadlines.push({ id: makeId(), title, dueDate: el.dlDate.value, done: false });
+      }
+      if (saveData()) showToast(editingDeadlineId ? "마감을 고쳤어요." : "마감을 추가했어요.");
+      el.dlDialog.close();
+      renderDeadlines();
+    });
+
+    // 삭제: 두 번 눌러야 삭제
+    el.dlDelete.addEventListener("click", () => {
+      if (!deadlineDeleteArmed) {
+        deadlineDeleteArmed = true;
+        el.dlDelete.textContent = "한 번 더 누르면 삭제";
+        return;
+      }
+      data.deadlines = data.deadlines.filter(d => d.id !== editingDeadlineId);
+      if (saveData()) showToast("마감을 삭제했어요.");
+      el.dlDialog.close();
+      renderDeadlines();
+    });
+
+    el.dlCancel.addEventListener("click", () => el.dlDialog.close());
+    el.dlAdd.addEventListener("click", () => openDeadlineDialog());
+    closeOnBackdrop(el.dlDialog);
+
+    /* =========================================================
+       9. [D] 오늘 할 일 3가지
+       - 하루에 3개까지만 (욕심내지 않기 위한 일부러 만든 제한)
+       - 날짜별로 따로 저장 → 날짜가 바뀌면 자동으로 새 목록
+       - 지난 날짜 목록은 지우지 않고 기록으로 남겨 둠
+       ========================================================= */
+    const TODO_LIMIT = 3;
+
+    // 오늘 목록 가져오기 (없으면 빈 목록)
+    function getTodayTodos() {
+      return data.todayTodos[toDateKey(new Date())] || [];
+    }
+
+    // 가장 최근 지난 날짜의 기록 찾기 (예: 어제 2/3 완료)
+    function getLastRecord() {
+      const todayKey = toDateKey(new Date());
+      const pastKeys = Object.keys(data.todayTodos)
+        .filter(key => key < todayKey && data.todayTodos[key].length > 0)
+        .sort();
+      if (!pastKeys.length) return null;
+      const key = pastKeys[pastKeys.length - 1];
+      const list = data.todayTodos[key];
+      return { key, total: list.length, done: list.filter(t => t.done).length };
+    }
+
+    function renderTodos() {
+      const todayKey = toDateKey(new Date());
+      const todos = getTodayTodos();
+
+      el.todoCount.textContent = `${todos.length}/${TODO_LIMIT}`;
+      el.todoList.textContent = "";
+
+      todos.forEach((todo, index) => {
+        const li = document.createElement("li");
+        li.className = "todo-item" + (todo.done ? " is-done" : "");
+
+        // 체크박스 + 글자를 label로 묶어서 글자를 눌러도 체크되게
+        const label = document.createElement("label");
+        label.className = "todo-label";
+        const check = document.createElement("input");
+        check.type = "checkbox";
+        check.className = "check";
+        check.checked = todo.done;
+        check.addEventListener("change", () => {
+          todo.done = check.checked;
+          saveData();
+          renderTodos();
+        });
+        const text = document.createElement("span");
+        text.className = "todo-text";
+        text.textContent = todo.text;
+        label.append(check, text);
+
+        // 지우기 버튼
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "icon-btn";
+        remove.textContent = "×";
+        remove.setAttribute("aria-label", `${todo.text} 지우기`);
+        remove.addEventListener("click", () => {
+          data.todayTodos[todayKey].splice(index, 1);
+          saveData();
+          renderTodos();
+          el.todoInput.focus();
+        });
+
+        li.append(label, remove);
+        el.todoList.append(li);
+      });
+
+      // 3개를 다 채우면 입력 칸 잠그기
+      const full = todos.length >= TODO_LIMIT;
+      el.todoInput.disabled = full;
+      el.todoAddBtn.disabled = full;
+      el.todoInput.placeholder = full ? "오늘은 3개를 다 채웠어요. 하나씩 끝내 봐요." : "오늘 꼭 끝낼 일";
+      el.todoEmpty.hidden = todos.length > 0;
+
+      // 지난 기록 한 줄
+      const record = getLastRecord();
+      if (record) {
+        const d = fromDateKey(record.key);
+        el.todoRecord.textContent =
+          `지난 기록 ${d.getMonth() + 1}/${d.getDate()} (${DAY_NAMES[d.getDay()]}): ${record.total}개 중 ${record.done}개 완료`;
+        el.todoRecord.hidden = false;
+      } else {
+        el.todoRecord.hidden = true;
+      }
+    }
+
+    // 할 일 추가 (Enter 또는 추가 버튼)
+    el.todoForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const text = el.todoInput.value.trim();
+      if (!text) return;
+      const todayKey = toDateKey(new Date());
+      if (!data.todayTodos[todayKey]) data.todayTodos[todayKey] = [];
+      if (data.todayTodos[todayKey].length >= TODO_LIMIT) return;  // 혹시 몰라 한 번 더 확인
+
+      data.todayTodos[todayKey].push({ text, done: false });
+      saveData();
+      el.todoInput.value = "";
+      renderTodos();
+      if (!el.todoInput.disabled) el.todoInput.focus();
+    });
+
+    /* =========================================================
+       10. 1초마다 화면 갱신
        - 시계·카운트다운: 매초
        - 현재 시각 선: 분이 바뀔 때만
-       - 타임라인 전체: 날짜가 바뀔 때만 (오늘 강조 위치 이동)
+       - 날짜가 바뀌면: 타임라인(오늘 강조), 마감 D-day, 오늘 할 일(새 목록)
        ========================================================= */
     let lastMinute = -1;
     let lastDateKey = toDateKey(new Date());
@@ -1517,13 +2035,18 @@
       if (dateKey !== lastDateKey) {
         lastDateKey = dateKey;
         renderTimeline();
+        renderDeadlines();
+        renderTodos();
       } else if (now.getMinutes() !== lastMinute) {
         renderNowLine(now);
       }
       lastMinute = now.getMinutes();
     }
 
-    renderTimeline();           // 처음 열었을 때 타임라인 그리기
+    // 처음 열었을 때 각 영역 그리기
+    renderTimeline();
+    renderDeadlines();
+    renderTodos();
     tick();                     // 시계도 바로 한 번 그리기
     setInterval(tick, 1000);    // 그 다음부터 1초마다 다시 그리기
   </script>

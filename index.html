@@ -13,7 +13,7 @@
                  / [D] 오늘 할 일 / [E] 과제 / [F] 바로가기, 그리고 입력 창들
       <script> : 동작(JavaScript)
                  1 도우미 → 2 샘플 데이터 → 3 저장 → 4~13 영역별 기능
-                 → 14 구글 캘린더 연동 → 15 시계
+                 → 14 구글 캘린더 연동 → 15 클라우드 동기화 → 16 시계
 
     고쳐 보기 팁
       - 색: 맨 위 :root 의 --bg, --scoreboard 같은 값을 바꾸면 전체에 반영
@@ -21,10 +21,19 @@
       - 데이터는 브라우저 localStorage 의 "commandCenter.data" 에 저장
       - 외부 서버·CDN·외부 폰트를 쓰지 않음 (인터넷 없이 동작)
         단, 설정에서 "구글 캘린더 연동"을 켠 경우에만 구글 서버와 통신 (GOOGLE_SETUP.md 참고)
+        그리고 클라우드 동기화(Firebase)에 로그인한 경우에만 Firebase와 통신 (FIREBASE_SETUP.md 참고)
     ============================================================
   -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- 홈 화면에 앱처럼 추가하기 (PWA) -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#141B26">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="커맨드센터">
   <title>업무 커맨드센터</title>
 
   <style>
@@ -394,11 +403,38 @@
       overflow-x: auto;
     }
 
-    /* 타임라인 격자: [시간 눈금 열] + [요일 5열] */
+    /* 타임라인 격자: [시간 눈금 열] + [요일 5열] (휴대폰에서는 1열, JavaScript가 열 수를 정함) */
     .tl-grid {
       display: grid;
       grid-template-columns: 44px repeat(5, minmax(0, 1fr));
       min-width: 520px;
+    }
+
+    /* 휴대폰: 요일 고르기 버튼 줄 */
+    .tl-daytabs {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 4px;
+    }
+    .tl-daytab {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 6px 0;
+      font: inherit;
+      font-size: 13px;
+      color: var(--text-sub);
+      background: none;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .tl-daytab strong { font-size: 15px; color: var(--text); }
+    .tl-daytab.is-today strong::after { content: "·"; color: var(--scoreboard); margin-left: 2px; }
+    .tl-daytab[aria-pressed="true"] {
+      background: var(--line);
+      color: var(--text);
     }
 
     /* 요일 머리글 (월 10/5) */
@@ -1002,6 +1038,30 @@
     }
     .dialog-actions .spacer { flex: 1; }
 
+    /* ---------- 클라우드 동기화 ---------- */
+    .btn.is-warn { color: var(--warn); border-color: var(--warn); }
+    .cloud-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    /* 데이터 고르기 창의 큰 선택 버튼 */
+    .choice-btn {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      text-align: left;
+      font: inherit;
+      color: var(--text);
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 12px 14px;
+      cursor: pointer;
+    }
+    .choice-btn:hover { border-color: var(--text-sub); }
+    .choice-btn span { font-size: 13px; color: var(--text-sub); }
+
     /* ---------- 설정 · 바로가기 편집 · 백업 창 ---------- */
     .dialog-wide { width: min(560px, calc(100% - 32px)); }
     /* 내용이 길면 창 안에서 스크롤 */
@@ -1118,6 +1178,15 @@
       }
     }
 
+    /* 휴대폰 폭: 타임라인을 하루씩 보기 (요일 버튼 또는 좌우로 밀어서 넘기기) */
+    @media (max-width: 640px) {
+      .tl-grid { min-width: 0; }
+      .tl-scroll { overflow-x: visible; touch-action: pan-y; }
+      .tl-actions { width: 100%; }
+      .countdown-value { font-size: 36px; }
+      .clock { gap: 12px; }
+    }
+
     /* 태블릿 세로 폭 이하: 마감과 할 일도 위아래로 */
     @media (max-width: 820px) {
       :root { --pad: 16px; }
@@ -1194,7 +1263,9 @@
       <!-- 일정이 없을 때만 보이는 안내 문구 -->
       <p class="tl-empty" id="tlEmpty" hidden>이번 주 일정이 없어요. 빈 칸을 눌러 추가하세요.</p>
       <!-- 타임라인 격자는 JavaScript가 채웁니다 (renderTimeline 함수) -->
-      <div class="tl-scroll">
+      <!-- 휴대폰 화면에서만: 요일 고르기 (하루씩 보기) -->
+      <div class="tl-daytabs" id="tlDayTabs" role="group" aria-label="요일 고르기" hidden></div>
+      <div class="tl-scroll" id="tlScroll">
         <div class="tl-grid" id="tlGrid"></div>
       </div>
     </section>
@@ -1263,6 +1334,8 @@
         <button type="button" class="btn btn-small btn-quiet" id="linkEdit">편집</button>
       </nav>
       <div class="tools-buttons">
+        <!-- 클라우드 동기화 상태 (Firebase 설정이 있고 웹 주소로 열었을 때만 보임) -->
+        <button type="button" class="btn" id="cloudBtn" hidden></button>
         <button type="button" class="btn" id="settingsBtn">설정</button>
         <button type="button" class="btn" id="backupBtn">백업</button>
       </div>
@@ -1567,6 +1640,54 @@
     </div>
   </dialog>
 
+  <!-- ===================================================
+       클라우드 계정 창 (로그인·로그아웃·이 기기 설정)
+       =================================================== -->
+  <dialog class="dialog" id="cloudDialog" aria-labelledby="cloudDialogTitle">
+    <div class="dialog-form">
+      <h2 id="cloudDialogTitle">클라우드 동기화</h2>
+      <p class="form-hint" id="cdStatus" role="status"></p>
+      <div class="cloud-actions">
+        <button type="button" class="btn btn-primary" id="cdLogin">구글로 로그인</button>
+        <button type="button" class="btn" id="cdLogout" hidden>로그아웃</button>
+        <button type="button" class="btn btn-danger btn-small" id="cdWipe" hidden>로그아웃하고 이 기기 데이터 지우기</button>
+      </div>
+      <section class="settings-section" aria-labelledby="cdDeviceTitle">
+        <h3 id="cdDeviceTitle">이 기기 설정</h3>
+        <label class="check-row">
+          <input type="checkbox" class="check" id="cdOff">
+          <span>이 기기는 클라우드를 쓰지 않음 (업무망 PC 등)</span>
+        </label>
+        <p class="form-hint">켜면 이 기기에서는 외부와 통신하지 않고 이 브라우저에만 저장해요. 바꾸면 페이지를 새로 불러와요.</p>
+      </section>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button type="button" class="btn" id="cdClose">닫기</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ===================================================
+       처음 연결할 때: 어느 데이터를 쓸지 고르기
+       =================================================== -->
+  <dialog class="dialog" id="syncChoiceDialog" aria-labelledby="syncChoiceTitle">
+    <div class="dialog-form">
+      <h2 id="syncChoiceTitle">어느 데이터를 쓸까요?</h2>
+      <p class="form-hint">클라우드와 이 기기에 서로 다른 데이터가 있어요. 고른 쪽으로 맞추고, 앞으로는 자동으로 동기화해요.</p>
+      <button type="button" class="choice-btn" id="scUseCloud">
+        <strong>클라우드 데이터 쓰기 (추천)</strong>
+        <span>다른 기기에서 쓰던 내용 · <span class="num" id="scCloudInfo"></span></span>
+        <span>이 기기 데이터는 브라우저에 한 번 보관해 둬요.</span>
+      </button>
+      <button type="button" class="choice-btn" id="scUseLocal">
+        <strong>이 기기 데이터로 클라우드 바꾸기</strong>
+        <span>지금 화면의 내용 · <span class="num" id="scLocalInfo"></span></span>
+        <span>클라우드에 있던 내용은 이 기기 데이터로 바뀌어요.</span>
+      </button>
+      <p class="form-hint">고르지 않고 닫으면 로그인을 취소해요.</p>
+    </div>
+  </dialog>
+
   <!-- 잠깐 떴다 사라지는 알림 -->
   <div class="toast" id="toast" role="status" hidden></div>
 
@@ -1705,6 +1826,36 @@
        - 저장된 게 없거나 깨져 있으면 샘플 데이터로 시작합니다.
        ========================================================= */
     const STORAGE_KEY = "commandCenter.data";
+
+    // Firebase 웹 앱 설정값 (FIREBASE_SETUP.md 4단계에서 복사한 값)
+    // - 비밀번호가 아니라 공개돼도 되는 값이에요. 데이터는 보안 규칙(firestore.rules)으로 보호합니다.
+    // - null이면 클라우드 동기화 기능이 숨겨지고, 지금처럼 이 브라우저에만 저장합니다.
+    const FIREBASE_CONFIG = null;
+
+    // 기기별 설정 (클라우드로 동기화하지 않음)
+    // - id: 이 기기 구분용 / cloudOff: 이 기기는 클라우드 안 씀
+    // - linkedUid: 이 기기가 연결된 계정 / dirty: 연결된 채로 로그아웃 상태에서 바꾼 내용이 있음
+    const DEVICE_KEY = "commandCenter.device";
+    const device = (() => {
+      let saved = {};
+      try { saved = JSON.parse(localStorage.getItem(DEVICE_KEY)) || {}; } catch (err) { /* 처음이면 빈 값 */ }
+      return {
+        id: saved.id || Math.random().toString(36).slice(2, 10),
+        cloudOff: saved.cloudOff === true,
+        linkedUid: saved.linkedUid || null,
+        dirty: saved.dirty === true
+      };
+    })();
+    function saveDevice() {
+      try { localStorage.setItem(DEVICE_KEY, JSON.stringify(device)); } catch (err) { /* 저장소를 못 쓰면 넘어감 */ }
+    }
+
+    // 클라우드 동기화 상태 (화면이 열려 있는 동안만 기억, 15번 영역에서 사용)
+    const cloud = {
+      status: "unavailable", message: "",
+      fb: null, auth: null, db: null, ref: null, user: null,
+      unsubscribe: null, saveTimer: null, writing: false, pendingUpload: false
+    };
     const CURRENT_VERSION = 1;
 
     // 옛날 구조의 데이터를 지금 구조로 바꾸기
@@ -1831,7 +1982,7 @@
       // 처음 열었을 때: 샘플 데이터로 시작하고 바로 저장
       if (!text) {
         const sample = fillNewSamples({ ...createSampleData(), seeded: [] });
-        saveData(sample, true);
+        saveData(sample, true, true);
         return sample;
       }
 
@@ -1839,7 +1990,7 @@
         const migrated = migrate(JSON.parse(text));
         if (!migrated) throw new Error("알 수 없는 데이터 버전");
         const loaded = fillNewSamples(normalizeData(migrated));
-        saveData(loaded, true);
+        saveData(loaded, true, true);
         return loaded;
       } catch (err) {
         // 데이터가 깨져 있으면 원래 내용을 따로 보관해 두고 샘플로 시작
@@ -1853,14 +2004,30 @@
     }
 
     // 데이터 저장하기 (silent=true면 실패해도 알림을 띄우지 않음)
-    function saveData(target = data, silent = false) {
+    // - localOnly=true면 브라우저에만 저장 (클라우드에서 받아 온 내용을 저장할 때 등)
+    function saveData(target = data, silent = false, localOnly = false) {
+      let ok = true;
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(target));
-        return true;
       } catch (err) {
         console.warn("저장하지 못했어요:", err);
         if (!silent) showToast("저장하지 못했어요. 브라우저 저장 공간이나 설정을 확인해 주세요.", true);
-        return false;
+        ok = false;
+      }
+      if (!localOnly && target === data) noteLocalChange();
+      return ok;
+    }
+
+    // 내용이 바뀌었을 때 클라우드 쪽 처리
+    function noteLocalChange() {
+      if (!device.linkedUid) return;                       // 클라우드와 연결된 적 없는 기기
+      if (cloud.user && cloud.user.uid === device.linkedUid) {
+        scheduleCloudSave();                               // 로그인 중 → 곧 클라우드에 저장
+      } else if (cloud.status === "loading") {
+        cloud.pendingUpload = true;                        // 로그인 확인 중 → 확인되면 저장
+      } else {
+        device.dirty = true;                               // 로그아웃 상태에서 바뀜 → 다음 로그인 때 물어보기
+        saveDevice();
       }
     }
 
@@ -1893,6 +2060,8 @@
       tlThis: document.getElementById("tlThis"),
       tlNext: document.getElementById("tlNext"),
       tlAdd: document.getElementById("tlAdd"),
+      tlDayTabs: document.getElementById("tlDayTabs"),
+      tlScroll: document.getElementById("tlScroll"),
       // 일정 입력 창
       evDialog: document.getElementById("eventDialog"),
       evForm: document.getElementById("eventForm"),
@@ -1990,7 +2159,21 @@
       gdLocation: document.getElementById("gdLocation"),
       gdLocationRow: document.getElementById("gdLocationRow"),
       gdLink: document.getElementById("gdLink"),
-      gdClose: document.getElementById("gdClose")
+      gdClose: document.getElementById("gdClose"),
+      // 클라우드 동기화
+      cloudBtn: document.getElementById("cloudBtn"),
+      cdDialog: document.getElementById("cloudDialog"),
+      cdStatus: document.getElementById("cdStatus"),
+      cdLogin: document.getElementById("cdLogin"),
+      cdLogout: document.getElementById("cdLogout"),
+      cdWipe: document.getElementById("cdWipe"),
+      cdOff: document.getElementById("cdOff"),
+      cdClose: document.getElementById("cdClose"),
+      scDialog: document.getElementById("syncChoiceDialog"),
+      scUseCloud: document.getElementById("scUseCloud"),
+      scUseLocal: document.getElementById("scUseLocal"),
+      scCloudInfo: document.getElementById("scCloudInfo"),
+      scLocalInfo: document.getElementById("scLocalInfo")
     };
 
     // 입력 창 바깥(어두운 부분)을 누르면 닫히게 하기
@@ -2102,6 +2285,65 @@
 
     // 지금 화면에 보여주고 있는 주의 월요일 (◀ ▶ 버튼으로 바뀜)
     let viewMonday = getDefaultMonday(new Date());
+
+    // ── 휴대폰 화면: 하루씩 보기 ──
+    const mobileQuery = window.matchMedia("(max-width: 640px)");
+    function isMobile() { return mobileQuery.matches; }
+
+    // 휴대폰에서 보고 있는 요일 (0=월 … 4=금)
+    function defaultDayIndex() {
+      const today = new Date();
+      const index = Math.round((fromDateKey(toDateKey(today)) - viewMonday) / 86400000);
+      return index >= 0 && index <= 4 ? index : 0;
+    }
+    let mobileDay = defaultDayIndex();
+
+    // 하루 앞/뒤로 (금요일 다음은 다음 주 월요일)
+    function shiftMobileDay(step) {
+      mobileDay += step;
+      if (mobileDay > 4) { viewMonday = addDays(viewMonday, 7); mobileDay = 0; }
+      if (mobileDay < 0) { viewMonday = addDays(viewMonday, -7); mobileDay = 4; }
+      renderTimeline();
+    }
+
+    // 요일 버튼 줄 그리기
+    function renderDayTabs(todayKey) {
+      el.tlDayTabs.hidden = !isMobile();
+      if (!isMobile()) return;
+      el.tlDayTabs.textContent = "";
+      [0, 1, 2, 3, 4].forEach(i => {
+        const date = addDays(viewMonday, i);
+        const tab = document.createElement("button");
+        tab.type = "button";
+        tab.className = "tl-daytab num";
+        if (toDateKey(date) === todayKey) tab.classList.add("is-today");
+        tab.setAttribute("aria-pressed", String(i === mobileDay));
+        const name = document.createElement("strong");
+        name.textContent = DAY_NAMES[date.getDay()];
+        const d = document.createElement("span");
+        d.textContent = `${date.getMonth() + 1}/${date.getDate()}`;
+        tab.append(name, d);
+        tab.addEventListener("click", () => { mobileDay = i; renderTimeline(); });
+        el.tlDayTabs.append(tab);
+      });
+    }
+
+    // 손가락으로 좌우로 밀면 하루씩 넘기기
+    let touchStart = null;
+    el.tlScroll.addEventListener("touchstart", (e) => {
+      if (!isMobile() || e.touches.length !== 1) return;
+      touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }, { passive: true });
+    el.tlScroll.addEventListener("touchend", (e) => {
+      if (!touchStart) return;
+      const dx = e.changedTouches[0].clientX - touchStart.x;
+      const dy = e.changedTouches[0].clientY - touchStart.y;
+      touchStart = null;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) shiftMobileDay(dx < 0 ? 1 : -1);
+    });
+
+    // 화면 폭이 휴대폰 ↔ PC 크기로 바뀌면 다시 그리기
+    mobileQuery.addEventListener("change", () => { renderTimeline(); scheduleFit(); });
 
     // 특정 날짜에 이 일정이 있는지 확인 (반복 일정 포함)
     function occursOn(event, date) {
@@ -2227,7 +2469,12 @@
       grid.textContent = "";  // 이전 내용 지우기
 
       // 월~금 5일의 날짜 목록
-      const days = [0, 1, 2, 3, 4].map(i => addDays(viewMonday, i));
+      // (휴대폰에서는 고른 하루만)
+      const days = isMobile()
+        ? [addDays(viewMonday, mobileDay)]
+        : [0, 1, 2, 3, 4].map(i => addDays(viewMonday, i));
+      grid.style.gridTemplateColumns = `44px repeat(${days.length}, minmax(0, 1fr))`;
+      renderDayTabs(todayKey);
 
       // ── 위쪽 머리글 줄: 빈 칸 + 요일 5개 ──
       const corner = document.createElement("div");
@@ -2333,7 +2580,7 @@
       });
 
       // ── 제목 옆 날짜 범위, 빈 주 안내, 이번 주 버튼 상태 ──
-      const friday = days[4];
+      const friday = addDays(viewMonday, 4);
       el.tlRange.textContent =
         `${viewMonday.getMonth() + 1}월 ${viewMonday.getDate()}일 – ${friday.getMonth() + 1}월 ${friday.getDate()}일`;
       el.tlEmpty.hidden = eventCount > 0 || hasAllDay;
@@ -2426,6 +2673,7 @@
     });
     el.tlThis.addEventListener("click", () => {
       viewMonday = getDefaultMonday(new Date());
+      mobileDay = defaultDayIndex();
       renderTimeline();
     });
 
@@ -2581,7 +2829,7 @@
       let startMin = Math.ceil((now.getHours() * 60 + now.getMinutes()) / 60) * 60;
       startMin = Math.min(Math.max(startMin, tlStart), tlEnd - 60);
       openEventDialog({
-        date: weekKeys.includes(todayKey) ? todayKey : weekKeys[0],
+        date: isMobile() ? weekKeys[mobileDay] : (weekKeys.includes(todayKey) ? todayKey : weekKeys[0]),
         start: minutesToTime(startMin),
         end: minutesToTime(startMin + 60)
       });
@@ -3802,7 +4050,349 @@
     }
 
     /* =========================================================
-       15. 1초마다 화면 갱신
+       15. 클라우드 동기화 (Firebase: 구글 로그인 + Firestore 저장)
+       - 구글 계정으로 로그인하면 데이터를 클라우드에도 저장해서
+         집 PC·회사 인터넷 PC·휴대폰 어디서나 같은 대시보드를 봅니다.
+       - 항상 "브라우저에 먼저 저장 → 클라우드에 이어서 저장" 순서라
+         인터넷이 끊겨도 그대로 쓸 수 있고, 다시 연결되면 자동으로 올라갑니다.
+       - 업무망 PC처럼 클라우드를 쓰지 않을 기기는
+         "이 기기는 클라우드를 쓰지 않음"을 켜 두면 외부와 통신하지 않아요.
+       - 저장 위치: Firestore의 users/{내 계정 id} 문서 하나
+         (내 계정만 읽고 쓸 수 있게 보안 규칙으로 막아 둠 → firestore.rules)
+       ========================================================= */
+    const FIREBASE_SDK = "https://www.gstatic.com/firebasejs/12.19.0/";
+
+    // 개발용: 내 PC의 에뮬레이터(가짜 Firebase 서버)로 시험할 때만 사용
+    const USE_EMULATOR = location.hostname === "127.0.0.1" && new URLSearchParams(location.search).has("emulator");
+
+    function cloudConfig() {
+      if (USE_EMULATOR) return { apiKey: "demo-key", authDomain: "127.0.0.1", projectId: "demo-mydashboard", appId: "demo" };
+      return FIREBASE_CONFIG;
+    }
+
+    // 이 기기에서 클라우드를 쓸 수 있는지 (설정값이 있고, 웹 주소로 열었을 때)
+    function cloudAvailable() {
+      return !!cloudConfig() && location.protocol !== "file:";
+    }
+
+    // 클라우드 준비 (처음 열 때)
+    async function initCloud() {
+      if (!cloudAvailable()) { setCloudStatus("unavailable"); return; }
+      if (device.cloudOff) { setCloudStatus("off"); return; }
+
+      setCloudStatus("loading");
+      try {
+        // Firebase 도구를 필요할 때만 불러오기
+        const [appMod, authMod, fsMod] = await Promise.all([
+          import(FIREBASE_SDK + "firebase-app.js"),
+          import(FIREBASE_SDK + "firebase-auth.js"),
+          import(FIREBASE_SDK + "firebase-firestore.js")
+        ]);
+        cloud.fb = { ...appMod, ...authMod, ...fsMod };
+        const fb = cloud.fb;
+        const app = fb.initializeApp(cloudConfig());
+        cloud.auth = fb.getAuth(app);
+        try {
+          // 오프라인에서도 쓰도록 기기 안(IndexedDB)에 사본을 두는 방식
+          cloud.db = fb.initializeFirestore(app, {
+            localCache: fb.persistentLocalCache({ tabManager: fb.persistentMultipleTabManager() })
+          });
+        } catch (err) {
+          cloud.db = fb.initializeFirestore(app, {});  // 시크릿 창 등에서는 메모리만 사용
+        }
+        if (USE_EMULATOR) {
+          fb.connectAuthEmulator(cloud.auth, "http://127.0.0.1:9099", { disableWarnings: true });
+          fb.connectFirestoreEmulator(cloud.db, "127.0.0.1", 8080);
+        }
+        fb.onAuthStateChanged(cloud.auth, onCloudUser);
+      } catch (err) {
+        console.warn("클라우드 준비 실패:", err);
+        setCloudStatus("error", "클라우드에 연결할 수 없어요. 이 기기에만 저장하고 있어요.");
+      }
+    }
+
+    // 로그인 상태가 바뀔 때 (로그인, 로그아웃, 페이지를 다시 열었을 때)
+    async function onCloudUser(user) {
+      stopCloudListener();
+      cloud.user = user;
+      if (!user) { setCloudStatus("signedOut"); return; }
+
+      cloud.ref = cloud.fb.doc(cloud.db, "users", user.uid);
+      setCloudStatus("syncing");
+
+      // 이 기기가 이 계정과 이미 연결돼 있고, 로그아웃 중에 바꾼 내용이 없으면 바로 실시간 동기화
+      if (device.linkedUid === user.uid && !device.dirty) {
+        if (cloud.pendingUpload) {
+          cloud.pendingUpload = false;
+          writeCloudNow();  // 로그인 확인 중에 바꾼 내용 먼저 올리기
+        }
+        startCloudListener();
+        return;
+      }
+
+      // 처음 연결: 클라우드에 이미 데이터가 있는지 확인
+      try {
+        const snap = await cloud.fb.getDoc(cloud.ref);
+        const remote = snap.exists() ? parseRemote(snap.data()) : null;
+        if (!remote) {
+          // 클라우드가 비어 있음 → 이 기기 데이터를 올림
+          linkDevice(user.uid);
+          writeCloudNow();
+          startCloudListener();
+        } else if (JSON.stringify(remote) === JSON.stringify(data)) {
+          linkDevice(user.uid);
+          startCloudListener();
+        } else {
+          openSyncChoice(remote);  // 둘 다 데이터가 있음 → 어느 쪽을 쓸지 물어보기
+        }
+      } catch (err) {
+        console.warn("클라우드 확인 실패:", err);
+        setCloudStatus("error", cloudErrorMessage(err));
+      }
+    }
+
+    // 클라우드 문서 → 대시보드 데이터 (못 읽으면 null)
+    function parseRemote(docData) {
+      try {
+        const migrated = migrate(JSON.parse(docData.json));
+        return migrated ? normalizeData(migrated) : null;
+      } catch (err) {
+        return null;
+      }
+    }
+
+    function linkDevice(uid) {
+      device.linkedUid = uid;
+      device.dirty = false;
+      saveDevice();
+    }
+
+    // data 안의 내용을 통째로 바꾸고 화면 다시 그리기 (클라우드로는 다시 올리지 않음)
+    function replaceData(next) {
+      Object.keys(data).forEach(key => { delete data[key]; });
+      Object.assign(data, next);
+      saveData(data, true, true);
+      renderAll();
+    }
+
+    // 실시간 동기화: 다른 기기에서 바꾸면 몇 초 안에 이 화면에도 반영
+    function startCloudListener() {
+      stopCloudListener();
+      cloud.unsubscribe = cloud.fb.onSnapshot(cloud.ref, { includeMetadataChanges: true }, (snap) => {
+        // 아직 서버에 안 올라간 내 저장이 있으면 "저장 중"
+        if (snap.metadata.hasPendingWrites) {
+          setCloudStatus(navigator.onLine ? "syncing" : "offline");
+          return;
+        }
+        setCloudStatus(snap.metadata.fromCache && !navigator.onLine ? "offline" : "synced");
+
+        if (!snap.exists()) { writeCloudNow(); return; }  // 클라우드 문서가 지워졌으면 다시 올림
+        if (cloud.saveTimer || cloud.writing) return;     // 내가 저장하려는 중이면 내 것이 우선
+
+        const json = snap.data().json;
+        if (json === JSON.stringify(data)) return;        // 이미 같은 내용
+        const remote = parseRemote(snap.data());
+        if (!remote) return;
+        replaceData(remote);
+        if (snap.data().device !== device.id) showToast("다른 기기에서 바뀐 내용을 가져왔어요.");
+      }, (err) => {
+        console.warn("실시간 동기화 오류:", err);
+        setCloudStatus("error", cloudErrorMessage(err));
+      });
+    }
+
+    function stopCloudListener() {
+      if (cloud.unsubscribe) cloud.unsubscribe();
+      cloud.unsubscribe = null;
+    }
+
+    // 저장할 때마다 바로 올리지 않고, 1초 동안 더 바뀌는 게 없으면 한 번에 올림
+    function scheduleCloudSave() {
+      if (!cloud.user || device.linkedUid !== cloud.user.uid) return;
+      clearTimeout(cloud.saveTimer);
+      setCloudStatus("syncing");
+      cloud.saveTimer = setTimeout(() => {
+        cloud.saveTimer = null;
+        writeCloudNow();
+      }, 1000);
+    }
+
+    // 지금 데이터를 클라우드에 저장
+    async function writeCloudNow() {
+      if (!cloud.user) return;
+      cloud.writing = true;
+      try {
+        await cloud.fb.setDoc(cloud.ref, {
+          json: JSON.stringify(data),
+          version: CURRENT_VERSION,
+          device: device.id,
+          updatedAt: cloud.fb.serverTimestamp()
+        });
+      } catch (err) {
+        console.warn("클라우드 저장 실패:", err);
+        setCloudStatus("error", cloudErrorMessage(err));
+      } finally {
+        cloud.writing = false;
+      }
+    }
+
+    // 오류를 쉬운 말로
+    function cloudErrorMessage(err) {
+      const code = (err && err.code) || "";
+      if (code.includes("permission-denied")) return "클라우드 권한이 없어요. 보안 규칙의 이메일을 확인해 주세요.";
+      if (code.includes("unauthorized-domain")) return "이 주소는 Firebase에 등록되지 않았어요. FIREBASE_SETUP.md 2단계를 확인해 주세요.";
+      if (code.includes("popup-blocked")) return "팝업이 막혔어요. 이 사이트의 팝업을 허용해 주세요.";
+      if (code.includes("popup-closed") || code.includes("cancelled-popup")) return "로그인 창이 닫혔어요.";
+      if (code.includes("network") || code.includes("unavailable")) return "인터넷 연결을 확인해 주세요. 이 기기에는 저장되고 있어요.";
+      return "클라우드 동기화에 문제가 생겼어요. 이 기기에는 저장되고 있어요.";
+    }
+
+    // ── 상태 표시 (아래쪽 ☁ 버튼과 계정 창) ──
+    const CLOUD_LABELS = {
+      loading: "☁ 준비 중…",
+      signedOut: "☁ 로그인",
+      off: "이 기기에만 저장",
+      syncing: "☁ 저장 중…",
+      synced: "☁ 저장됨",
+      offline: "☁ 오프라인",
+      error: "☁ 동기화 문제"
+    };
+
+    function setCloudStatus(status, message = "") {
+      cloud.status = status;
+      cloud.message = message;
+      el.cloudBtn.hidden = status === "unavailable";
+      el.cloudBtn.textContent = CLOUD_LABELS[status] || "";
+      el.cloudBtn.classList.toggle("is-warn", status === "error" || status === "offline");
+      el.cloudBtn.title = message || "";
+      if (el.cdDialog.open) renderCloudDialog();
+    }
+
+    // 계정 창 내용 채우기
+    function renderCloudDialog() {
+      const signedIn = !!cloud.user;
+      const s = cloud.status;
+      el.cdStatus.textContent =
+        s === "off" ? "이 기기는 클라우드를 쓰지 않고, 이 브라우저에만 저장하고 있어요." :
+        s === "error" ? cloud.message :
+        s === "offline" ? "인터넷이 끊겨 있어요. 이 기기에 저장해 두었다가 다시 연결되면 자동으로 올려요." :
+        s === "syncing" ? `${cloud.user ? cloud.user.email : ""} · 클라우드에 저장하는 중이에요.` :
+        s === "synced" ? `${cloud.user.email} 계정과 동기화되고 있어요.` :
+        s === "loading" ? "클라우드 연결을 준비하고 있어요." :
+        "구글 계정으로 로그인하면 다른 기기에서도 같은 대시보드를 볼 수 있어요.";
+      el.cdLogin.hidden = signedIn || s === "off" || s === "loading";
+      el.cdLogout.hidden = !signedIn;
+      el.cdWipe.hidden = !signedIn;
+      el.cdOff.checked = device.cloudOff;
+    }
+
+    let wipeArmed = false;
+    function openCloudDialog() {
+      wipeArmed = false;
+      el.cdWipe.textContent = "로그아웃하고 이 기기 데이터 지우기";
+      renderCloudDialog();
+      el.cdDialog.showModal();
+    }
+
+    // 구글로 로그인 (팝업)
+    el.cdLogin.addEventListener("click", async () => {
+      if (!cloud.auth) return;
+      try {
+        await cloud.fb.signInWithPopup(cloud.auth, new cloud.fb.GoogleAuthProvider());
+        el.cdDialog.close();
+      } catch (err) {
+        setCloudStatus(cloud.user ? cloud.status : "signedOut", cloudErrorMessage(err));
+        el.cdStatus.textContent = cloudErrorMessage(err);
+      }
+    });
+
+    // 로그아웃 (이 기기 데이터는 그대로 둠)
+    el.cdLogout.addEventListener("click", async () => {
+      await cloud.fb.signOut(cloud.auth);
+      el.cdDialog.close();
+      showToast("로그아웃했어요. 이 기기에 저장된 내용은 그대로 남아 있어요.");
+    });
+
+    // 로그아웃 + 이 기기 데이터 지우기 (공용 PC에서 쓴 뒤) — 두 번 눌러야 실행
+    el.cdWipe.addEventListener("click", async () => {
+      if (!wipeArmed) {
+        wipeArmed = true;
+        el.cdWipe.textContent = "한 번 더 누르면 이 기기에서 지워져요 (클라우드는 그대로)";
+        return;
+      }
+      stopCloudListener();
+      await cloud.fb.signOut(cloud.auth);
+      try {
+        await cloud.fb.terminate(cloud.db);
+        await cloud.fb.clearIndexedDbPersistence(cloud.db);  // 기기 안의 클라우드 사본도 지움
+      } catch (err) { /* 지우지 못해도 계속 */ }
+      try {
+        Object.keys(localStorage)
+          .filter(key => key.startsWith("commandCenter."))
+          .forEach(key => localStorage.removeItem(key));
+      } catch (err) { /* 저장소를 못 쓰면 넘어감 */ }
+      location.reload();
+    });
+
+    // 이 기기는 클라우드를 쓰지 않음 (업무망 PC 등)
+    el.cdOff.addEventListener("change", () => {
+      device.cloudOff = el.cdOff.checked;
+      saveDevice();
+      // 바꾼 설정은 새로고침해야 확실히 적용됨 (Firebase 연결을 끊거나 다시 시작)
+      location.reload();
+    });
+
+    // 처음 연결할 때: 클라우드 데이터와 이 기기 데이터 중 고르기
+    let pendingRemote = null;
+    function summarize(d) {
+      return `일정 ${d.events.length}개 · 과제 ${d.tasks.length}개 · 마감 ${d.deadlines.length}개 · 바로가기 ${d.links.length}개`;
+    }
+    function openSyncChoice(remote) {
+      pendingRemote = remote;
+      el.scCloudInfo.textContent = summarize(remote);
+      el.scLocalInfo.textContent = summarize(data);
+      el.scDialog.showModal();
+    }
+    // 이 기기 데이터는 혹시 몰라 한 번 보관해 두고 선택한 쪽으로 맞춤
+    function backupLocalBeforeSync() {
+      try { localStorage.setItem(STORAGE_KEY + ".beforeSync", JSON.stringify(data)); } catch (err) { /* 넘어감 */ }
+    }
+    el.scUseCloud.addEventListener("click", () => {
+      backupLocalBeforeSync();
+      linkDevice(cloud.user.uid);
+      replaceData(pendingRemote);
+      pendingRemote = null;
+      el.scDialog.close("chosen");
+      startCloudListener();
+      showToast("클라우드 데이터를 불러왔어요.");
+    });
+    el.scUseLocal.addEventListener("click", () => {
+      linkDevice(cloud.user.uid);
+      pendingRemote = null;
+      el.scDialog.close("chosen");
+      writeCloudNow();
+      startCloudListener();
+      showToast("이 기기 데이터로 클라우드를 바꿨어요.");
+    });
+    // 고르지 않고 닫으면 로그아웃 (아무것도 바꾸지 않음)
+    el.scDialog.addEventListener("close", () => {
+      if (el.scDialog.returnValue !== "chosen" && cloud.user) {
+        pendingRemote = null;
+        cloud.fb.signOut(cloud.auth);
+      }
+      el.scDialog.returnValue = "";
+    });
+
+    el.cloudBtn.addEventListener("click", openCloudDialog);
+    el.cdClose.addEventListener("click", () => el.cdDialog.close());
+    closeOnBackdrop(el.cdDialog);
+
+    // 인터넷 연결 상태가 바뀌면 표시 갱신
+    window.addEventListener("online", () => { if (cloud.status === "offline") setCloudStatus("syncing"); });
+    window.addEventListener("offline", () => { if (cloud.user) setCloudStatus("offline"); });
+
+    /* =========================================================
+       16. 1초마다 화면 갱신
        - 시계·카운트다운: 매초
        - 현재 시각 선: 분이 바뀔 때만
        - 날짜가 바뀌면: 타임라인(오늘 강조), 마감 D-day, 오늘 할 일(새 목록), 과제 D-day
@@ -3828,7 +4418,14 @@
 
     // 처음 열었을 때 각 영역 그리기
     renderAll();
-    initGoogle();               // 구글 연동 (설정에서 켰을 때만 동작)
+    initGoogle();               // 구글 캘린더 연동 (설정에서 켰을 때만 동작)
+    initCloud();                // 클라우드 동기화 (Firebase 설정이 있을 때만 동작)
+
+    // 홈 화면 앱(PWA): 인터넷이 끊겨도 열리도록 화면 파일을 기기에 보관
+    // (파일을 더블클릭해서 열었을 때는 쓰지 않음)
+    if ("serviceWorker" in navigator && location.protocol !== "file:") {
+      navigator.serviceWorker.register("sw.js").catch(err => console.warn("오프라인 준비 실패:", err));
+    }
     tick();                     // 시계도 바로 한 번 그리기
     setInterval(tick, 1000);    // 그 다음부터 1초마다 다시 그리기
   </script>

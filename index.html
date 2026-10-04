@@ -1089,6 +1089,26 @@
       outline-offset: 2px;
     }
 
+    /* 반복 일정: 종료일·빼기 */
+    .repeat-extra { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+    .skip-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+    .skip-list { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--text-sub); }
+    .skip-chip {
+      font: inherit;
+      font-size: 13px;
+      color: var(--text);
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 4px 2px 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+    }
+    .skip-chip:hover { border-color: var(--text-sub); }
+    .skip-chip span[aria-hidden] { color: var(--text-sub); padding: 0 4px; }
+
     .form-hint {
       font-size: 13px;
       color: var(--text-sub);
@@ -1492,7 +1512,22 @@
           <label class="day-check"><input type="checkbox" value="6" id="evRepeat6"><span>토</span></label>
           <label class="day-check"><input type="checkbox" value="0" id="evRepeat0"><span>일</span></label>
         </div>
-        <p class="form-hint" id="evRepeatHint" hidden>반복 일정은 고친 내용이 모든 주에 함께 적용돼요.</p>
+        <p class="form-hint" id="evRepeatHint" hidden>반복 일정은 고친 내용이 모든 주에 함께 적용돼요. 한 주만 빼려면 아래 ‘이번 주만 빼기’를 누르세요.</p>
+
+        <!-- 반복할 때만 보임: 종료일, 이번 주만 빼기, 뺀 날 목록 -->
+        <div class="repeat-extra" id="evRepeatExtra" hidden>
+          <label class="field">
+            <span class="field-label">반복 종료일 (선택, 이 날까지 반복)</span>
+            <input class="input num" type="date" id="evEndDate" min="2000-01-01" max="2099-12-31">
+          </label>
+          <div class="skip-actions" id="evSkipActions" hidden>
+            <button type="button" class="btn btn-small" id="evSkipDay">이번 주만 빼기</button>
+            <button type="button" class="btn btn-small" id="evSkipWeek" hidden>이번 주 모두 빼기</button>
+          </div>
+          <div class="skip-list" id="evSkipList" hidden></div>
+          <!-- 뺀 날 목록을 담아 두는 숨은 칸 (바뀐 내용 확인에도 쓰임) -->
+          <input type="hidden" id="evSkipData" value="[]">
+        </div>
       </fieldset>
 
       <label class="field">
@@ -1964,6 +1999,7 @@
         ],
         events: [
           // repeatDays: 비어 있으면 1회성, [1,3,5]면 월·수·금 매주 반복 (1=월 … 6=토, 0=일)
+          // (반복 일정에는 skipDates: 뺀 날짜들, endDate: 반복 종료일 도 붙을 수 있음)
           { id: makeId(), title: "주간 팀 회의",   categoryId: "meeting",  date: dayOf(0), start: "10:00", end: "11:00", repeatDays: [1],       memo: "" },
           { id: makeId(), title: "결재 문서 검토", categoryId: "admin",    date: dayOf(0), start: "10:30", end: "11:30", repeatDays: [],        memo: "" },
           { id: makeId(), title: "집중 업무 블록", categoryId: "focus",    date: dayOf(1), start: "09:00", end: "11:30", repeatDays: [2, 4],    memo: "" },
@@ -2120,6 +2156,9 @@
             start: e.start,
             end: e.end,
             repeatDays: Array.isArray(e.repeatDays) ? e.repeatDays.map(Number) : [],
+            // 반복 일정에서 뺀 날짜들, 반복 종료일 (없으면 계속 반복)
+            skipDates: Array.isArray(e.skipDates) ? [...new Set(e.skipDates.filter(isDate))].sort() : [],
+            endDate: isDate(e.endDate) ? e.endDate : "",
             memo: typeof e.memo === "string" ? e.memo : "",
             ...(e.sample === true ? { sample: true } : {})
           })),
@@ -2305,6 +2344,13 @@
       evEnd: document.getElementById("evEnd"),
       evRepeat: document.getElementById("evRepeat"),
       evRepeatHint: document.getElementById("evRepeatHint"),
+      evRepeatExtra: document.getElementById("evRepeatExtra"),
+      evEndDate: document.getElementById("evEndDate"),
+      evSkipActions: document.getElementById("evSkipActions"),
+      evSkipDay: document.getElementById("evSkipDay"),
+      evSkipWeek: document.getElementById("evSkipWeek"),
+      evSkipList: document.getElementById("evSkipList"),
+      evSkipData: document.getElementById("evSkipData"),
       evMemo: document.getElementById("evMemo"),
       evError: document.getElementById("evError"),
       evDelete: document.getElementById("evDelete"),
@@ -2619,7 +2665,7 @@
         .map(event => ({ event, rawStart: timeToMinutes(event.start), rawEnd: timeToMinutes(event.end) }))
         .concat(googleTimedItemsFor(fromDateKey(todayKey)))
         .sort((a, b) => a.rawStart - b.rawStart);
-      const openItem = (item) => item.google ? openGoogleEventDialog(item.google) : openEventDialog({ event: item.event });
+      const openItem = (item) => item.google ? openGoogleEventDialog(item.google) : openEventDialog({ event: item.event, occurrence: todayKey });
       const current = items.filter(i => i.rawStart <= nowMin && nowMin < i.rawEnd).sort((a, b) => a.rawEnd - b.rawEnd)[0];
       const next = items.find(i => i.rawStart > nowMin);
       if (current) {
@@ -2740,8 +2786,11 @@
       const key = toDateKey(date);
       // 1회성 일정: 날짜가 같으면 있음
       if (event.repeatDays.length === 0) return event.date === key;
-      // 반복 일정: 요일이 맞고, 시작일(date) 이후면 있음
-      return event.repeatDays.includes(date.getDay()) && key >= event.date;
+      // 반복 일정: 요일이 맞고, 시작일 ~ 종료일 사이이고, 뺀 날이 아니면 있음
+      return event.repeatDays.includes(date.getDay())
+        && key >= event.date
+        && (!event.endDate || key <= event.endDate)
+        && !(event.skipDates || []).includes(key);
     }
 
     // 카테고리 id로 카테고리 정보 찾기 (못 찾으면 회색 기본값)
@@ -2841,7 +2890,7 @@
         return block;
       }
 
-      block.addEventListener("click", () => openEventDialog({ event: item.event }));
+      block.addEventListener("click", () => openEventDialog({ event: item.event, occurrence: toDateKey(date) }));
       return block;
     }
 
@@ -2862,7 +2911,7 @@
         if (hidden.length === 1) {
           const item = hidden[0];
           if (item.google) openGoogleEventDialog(item.google);
-          else openEventDialog({ event: item.event });
+          else openEventDialog({ event: item.event, occurrence: toDateKey(date) });
           return;
         }
         showToast(list.slice(0, 3).join(" · ") + (list.length > 3 ? ` 외 ${list.length - 3}개` : "") +
@@ -3126,7 +3175,86 @@
       const repeating = repeatChecks().some(c => c.checked);
       el.evDateLabel.textContent = repeating ? "반복 시작일" : "날짜";
       el.evRepeatHint.hidden = !(repeating && editingId);
+      el.evRepeatExtra.hidden = !repeating;
+      renderSkipControls();
     }
+
+    // ── 반복 일정: 이번 주만 빼기 ──
+    let editingOccurrence = null;   // 수정 창을 연 블록의 날짜 (예: "2026-10-07")
+    let skipMessage = "";           // 빼기 버튼으로 저장했을 때 보여줄 알림
+
+    function getEditingSkips() {
+      try { return JSON.parse(el.evSkipData.value); } catch (err) { return []; }
+    }
+    function setEditingSkips(list) {
+      el.evSkipData.value = JSON.stringify([...new Set(list)].sort());
+      renderSkipControls();
+    }
+    // "10/7(수)"
+    function shortDate(key) {
+      const d = fromDateKey(key);
+      return `${d.getMonth() + 1}/${d.getDate()}(${DAY_NAMES[d.getDay()]})`;
+    }
+    // 이번 주(연 날짜가 속한 주)에 이 반복 일정이 있는 날짜들
+    function weekOccurrences(occurrenceKey) {
+      const monday = getMonday(fromDateKey(occurrenceKey));
+      const days = repeatChecks().filter(c => c.checked).map(c => Number(c.value));
+      return WEEK.map(i => addDays(monday, i))
+        .filter(d => days.includes(d.getDay()) && toDateKey(d) >= el.evDate.value)
+        .map(toDateKey);
+    }
+
+    function renderSkipControls() {
+      const repeating = repeatChecks().some(c => c.checked);
+      const skips = getEditingSkips();
+
+      // 빼기 버튼: 반복 일정을 특정 날짜 블록에서 열었을 때만
+      const canSkip = repeating && editingId && editingOccurrence && !skips.includes(editingOccurrence);
+      el.evSkipActions.hidden = !canSkip;
+      if (canSkip) {
+        el.evSkipDay.textContent = `이번 주만 빼기 (${shortDate(editingOccurrence)})`;
+        const weekDays = weekOccurrences(editingOccurrence).filter(k => !skips.includes(k));
+        el.evSkipWeek.hidden = weekDays.length < 2;
+        el.evSkipWeek.textContent = `이번 주 모두 빼기 (${weekDays.length}번)`;
+      }
+
+      // 뺀 날 목록 (누르면 다시 넣기)
+      el.evSkipList.textContent = "";
+      el.evSkipList.hidden = !(repeating && skips.length);
+      if (repeating && skips.length) {
+        const label = document.createElement("span");
+        label.textContent = "뺀 날:";
+        el.evSkipList.append(label);
+        skips.forEach(key => {
+          const chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "skip-chip num";
+          chip.setAttribute("aria-label", `${shortDate(key)} 다시 넣기`);
+          chip.title = "누르면 다시 넣어요 (저장해야 반영)";
+          const text = document.createElement("span");
+          text.textContent = shortDate(key);
+          const x = document.createElement("span");
+          x.setAttribute("aria-hidden", "true");
+          x.textContent = "×";
+          chip.append(text, x);
+          chip.addEventListener("click", () => setEditingSkips(getEditingSkips().filter(k => k !== key)));
+          el.evSkipList.append(chip);
+        });
+      }
+    }
+
+    // 빼기 버튼: 뺀 날에 넣고 바로 저장 (창의 다른 변경도 함께 저장됨)
+    el.evSkipDay.addEventListener("click", () => {
+      setEditingSkips([...getEditingSkips(), editingOccurrence]);
+      skipMessage = `${shortDate(editingOccurrence)} 일정만 뺐어요. 다시 넣으려면 이 일정을 열어 ‘뺀 날’에서 누르세요.`;
+      el.evForm.requestSubmit();
+    });
+    el.evSkipWeek.addEventListener("click", () => {
+      const weekDays = weekOccurrences(editingOccurrence);
+      setEditingSkips([...getEditingSkips(), ...weekDays]);
+      skipMessage = `이번 주 ${weekDays.map(shortDate).join(", ")} 일정을 뺐어요.`;
+      el.evForm.requestSubmit();
+    });
 
     function resetDeleteButton() {
       deleteArmed = false;
@@ -3136,8 +3264,10 @@
     // 입력 창 열기
     // - 새 일정: openEventDialog({ date, start, end })
     // - 수정:    openEventDialog({ event })
-    function openEventDialog({ event = null, date, start, end }) {
+    function openEventDialog({ event = null, date, start, end, occurrence = null }) {
       editingId = event ? event.id : null;
+      editingOccurrence = occurrence;
+      skipMessage = "";
       resetDeleteButton();
       el.evError.hidden = true;
 
@@ -3159,6 +3289,8 @@
         el.evEnd.value = event.end;
         el.evMemo.value = event.memo || "";
         repeatChecks().forEach(c => { c.checked = event.repeatDays.includes(Number(c.value)); });
+        el.evEndDate.value = event.endDate || "";
+        el.evSkipData.value = JSON.stringify(event.skipDates || []);
         el.evDelete.hidden = false;
       } else {
         el.evDialogTitle.textContent = "일정 추가";
@@ -3169,6 +3301,8 @@
         el.evEnd.value = end;
         el.evMemo.value = "";
         repeatChecks().forEach(c => { c.checked = false; });
+        el.evEndDate.value = "";
+        el.evSkipData.value = "[]";
         el.evDelete.hidden = true;
       }
       updateRepeatLabel();
@@ -3205,13 +3339,24 @@
         return;
       }
 
+      const repeatDays = repeatChecks().filter(c => c.checked).map(c => Number(c.value));
+      const endDate = repeatDays.length ? el.evEndDate.value : "";
+      if (endDate && !isDateKey(endDate)) { showFormError(DATE_ERROR); el.evEndDate.focus(); return; }
+      if (endDate && endDate < el.evDate.value) {
+        showFormError("반복 종료일은 반복 시작일과 같거나 뒤여야 해요.");
+        el.evEndDate.focus();
+        return;
+      }
+
       const values = {
         title,
         categoryId: el.evCategory.value,
         date: el.evDate.value,
         start: startText,
         end: endText,
-        repeatDays: repeatChecks().filter(c => c.checked).map(c => Number(c.value)),
+        repeatDays,
+        skipDates: repeatDays.length ? getEditingSkips() : [],
+        endDate,
         memo: el.evMemo.value.trim()
       };
 
@@ -3231,7 +3376,11 @@
         data.events.push({ id: makeId(), ...values });
       }
 
-      if (saveData()) showToast(restored ? "다른 기기에서 지워진 일정이라 다시 추가했어요." : editingId ? "일정을 고쳤어요." : "일정을 추가했어요.");
+      if (saveData()) showToast(
+        restored ? "다른 기기에서 지워진 일정이라 다시 추가했어요." :
+        skipMessage ? skipMessage :
+        editingId ? "일정을 고쳤어요." : "일정을 추가했어요.");
+      skipMessage = "";
       closeEventDialog();
       renderTimeline();
     });

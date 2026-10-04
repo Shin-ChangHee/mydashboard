@@ -1,6 +1,26 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+  <!--
+    ============================================================
+    개인 업무 커맨드센터 (index.html 한 파일로 동작)
+    ------------------------------------------------------------
+    파일 구성
+      <style>  : 화면 모양(CSS)
+                 1 디자인 변수 → 2 기본 → 3 레이아웃 → 4 공통 부품
+                 → 5~9 영역별 [A]~[F] → 10 입력 창 → 11 알림 → 12 반응형
+      <body>   : 화면 뼈대(HTML)  [A] 상단 바 / [B] 타임라인 / [C] 마감
+                 / [D] 오늘 할 일 / [E] 과제 / [F] 바로가기, 그리고 입력 창들
+      <script> : 동작(JavaScript)
+                 1 도우미 → 2 샘플 데이터 → 3 저장 → 4~13 영역별 기능 → 14 시계
+
+    고쳐 보기 팁
+      - 색: 맨 위 :root 의 --bg, --scoreboard 같은 값을 바꾸면 전체에 반영
+      - 타임라인 1시간 높이: --hour-h (큰 화면에서는 자동으로 맞춰짐)
+      - 데이터는 브라우저 localStorage 의 "commandCenter.data" 에 저장
+      - 외부 서버·CDN·외부 폰트를 쓰지 않음 (인터넷 없이 동작)
+    ============================================================
+  -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>업무 커맨드센터</title>
@@ -23,8 +43,9 @@
       --danger: #EE6C6A;      /* D-3 이내 마감 */
       --warn: #E99A4F;        /* D-7 이내 마감 */
       --today: #222D3D;       /* 타임라인에서 오늘 열 배경 (surface보다 살짝 밝게) */
+      --text-on-event: #BAC4D1; /* 일정 블록 안 시간 글자 (색 배경 위에서도 대비 4.5:1 이상) */
 
-      /* 카테고리 기본 색상 (2단계부터 일정 블록에 사용) */
+      /* 카테고리 기본 색상 (실제 일정 색은 설정 화면에서 바꾼 값을 씀. 여기 값은 과제 상태 색에도 사용) */
       --cat-meeting: #6FA8DC;   /* 회의 */
       --cat-focus: #7CC4A4;     /* 집중 업무 */
       --cat-external: #B394D9;  /* 외부 일정 */
@@ -80,6 +101,22 @@
     /* 숫자 자릿수가 흔들리지 않게 (시계·카운트다운·D-day·진행률) */
     .num { font-variant-numeric: tabular-nums; }
 
+    /* hidden 속성이 붙은 요소는 항상 숨기기 */
+    [hidden] { display: none !important; }
+
+    /* 화면에는 안 보이지만 화면 낭독기는 읽는 글자 */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
     /* =========================================================
        3. 전체 레이아웃 (격자)
        - 위에서부터: [A] 상단 바 / [B]+[C][D] / [E] / [F]
@@ -121,17 +158,117 @@
       min-width: 0;
     }
 
-    /* 아직 만들지 않은 영역에 보여줄 안내 문구 */
-    [hidden] { display: none !important; }
+    /* 각 영역 머리글 줄: 제목 + 오른쪽 버튼 */
+    .panel {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .panel-head h2 { margin: 0; }
+    .panel-count {
+      font-size: 14px;
+      color: var(--text-sub);
+    }
+    /* =========================================================
+       4. 공통 부품 (버튼 · 입력 칸 · 체크박스 · 안내 문구)
+       - 여러 영역에서 함께 쓰는 모양입니다.
+       ========================================================= */
+    /* 기본 버튼 모양: 얇은 테두리만 있는 조용한 버튼 */
+    .btn {
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .btn:hover { background: var(--surface); }
+    .btn:disabled {
+      cursor: not-allowed;
+      color: var(--text-sub);
+    }
+    .btn:disabled:hover { background: transparent; }
+    /* 강조 버튼 (저장 등) */
+    .btn-primary {
+      background: var(--text);
+      color: var(--bg);
+      border-color: var(--text);
+      font-weight: 600;
+    }
+    .btn-primary:hover { background: #FFFFFF; }
+    /* 위험한 동작 버튼 (삭제) */
+    .btn-danger {
+      color: var(--danger);
+      border-color: var(--danger);
+    }
+    .btn-danger:hover { background: rgba(238, 108, 106, 0.12); }
 
-    .placeholder {
+    .btn-small { padding: 4px 10px; font-size: 13px; }
+
+    /* 눈에 덜 띄는 버튼 (편집) */
+    .btn-quiet {
+      border-color: transparent;
+      color: var(--text-sub);
+    }
+    .btn-quiet:hover { color: var(--text); }
+
+    /* 작은 × 지우기 버튼 */
+    .icon-btn {
+      background: none;
+      border: 0;
+      color: var(--text-sub);
+      font-size: 18px;
+      line-height: 1;
+      width: 28px;
+      height: 28px;
+      border-radius: 4px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .icon-btn:hover { color: var(--text); background: var(--line); }
+    .icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .icon-btn:disabled:hover { background: none; }
+
+    /* 글자 입력 칸 */
+    .input {
+      width: 100%;
+      font: inherit;
+      color: var(--text);
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+    .input:focus-visible {
+      outline: 2px solid var(--text);
+      outline-offset: 0;
+    }
+    textarea.input { resize: vertical; min-height: 60px; }
+    .input:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .empty-text {
       color: var(--text-sub);
       font-size: 14px;
       margin: 0;
     }
 
+    /* 체크박스: 다크 화면에 맞게 크기·색 조정 */
+    .check {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+      accent-color: var(--text-sub);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
     /* =========================================================
-       4. [A] 상단 바
+       5. [A] 상단 바
        ========================================================= */
     .area-top {
       display: flex;
@@ -209,64 +346,6 @@
       color: var(--text-sub);
       margin-top: 4px;
     }
-
-    /* =========================================================
-       5. [F] 바로가기 & 도구
-       ========================================================= */
-    .area-tools {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 12px;
-      padding-top: 14px;
-      padding-bottom: 14px;
-    }
-    .tools-links {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-    .tools-title {
-      font-size: 14px;
-      color: var(--text-sub);
-      margin-right: 4px;
-    }
-    .tools-buttons { display: flex; gap: 8px; }
-    .link-list {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    /* 링크(a)도 버튼과 같은 모양으로 */
-    .link-btn {
-      color: var(--text);
-      text-decoration: none;
-      display: inline-block;
-    }
-    /* 눈에 덜 띄는 버튼 (편집) */
-    .btn-quiet {
-      border-color: transparent;
-      color: var(--text-sub);
-    }
-    .btn-quiet:hover { color: var(--text); }
-
-    /* 기본 버튼 모양: 얇은 테두리만 있는 조용한 버튼 */
-    .btn {
-      background: transparent;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 6px 14px;
-      font-size: 14px;
-      cursor: pointer;
-    }
-    .btn:hover { background: var(--surface); }
-    .btn:disabled {
-      cursor: not-allowed;
-      color: var(--text-sub);
-    }
-    .btn:disabled:hover { background: transparent; }
 
     /* =========================================================
        6. [B] 이번 주 타임라인
@@ -387,7 +466,7 @@
     .tl-event-time {
       display: block;
       font-size: 12px;
-      color: var(--text-sub);
+      color: var(--text-on-event);
       white-space: nowrap;
     }
     /* 30분 이하로 짧은 일정은 시간 줄을 숨기고 제목만 */
@@ -422,7 +501,6 @@
       margin: 0;
     }
 
-
     /* 빈 칸을 누르면 일정을 추가할 수 있다는 걸 마우스 모양으로 알려줌 */
     .tl-col { cursor: pointer; }
 
@@ -439,57 +517,9 @@
     }
     button.tl-event:hover { filter: brightness(1.15); }
 
-    /* 강조 버튼 (저장 등) */
-    .btn-primary {
-      background: var(--text);
-      color: var(--bg);
-      border-color: var(--text);
-      font-weight: 600;
-    }
-    .btn-primary:hover { background: #FFFFFF; }
-    /* 위험한 동작 버튼 (삭제) */
-    .btn-danger {
-      color: var(--danger);
-      border-color: var(--danger);
-    }
-    .btn-danger:hover { background: rgba(238, 108, 106, 0.12); }
-
     /* =========================================================
-       [C] 다가오는 마감 · [D] 오늘 할 일 공통
+       7. [C] 다가오는 마감 · [D] 오늘 할 일
        ========================================================= */
-    .panel {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .panel-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-    .panel-head h2 { margin: 0; }
-    .panel-count {
-      font-size: 14px;
-      color: var(--text-sub);
-    }
-    .btn-small { padding: 4px 10px; font-size: 13px; }
-
-    .empty-text {
-      color: var(--text-sub);
-      font-size: 14px;
-      margin: 0;
-    }
-
-    /* 체크박스: 다크 화면에 맞게 크기·색 조정 */
-    .check {
-      width: 18px;
-      height: 18px;
-      margin: 0;
-      accent-color: var(--text-sub);
-      cursor: pointer;
-      flex-shrink: 0;
-    }
 
     /* ---------- [C] 마감 목록 ---------- */
     .dl-list {
@@ -587,30 +617,14 @@
       color: var(--text-sub);
     }
 
-    /* 작은 × 지우기 버튼 */
-    .icon-btn {
-      background: none;
-      border: 0;
-      color: var(--text-sub);
-      font-size: 18px;
-      line-height: 1;
-      width: 28px;
-      height: 28px;
-      border-radius: 4px;
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-    .icon-btn:hover { color: var(--text); background: var(--line); }
-
     .todo-form {
       display: flex;
       gap: 8px;
     }
     .todo-form .input { flex: 1; min-width: 0; }
-    .input:disabled { opacity: 0.6; cursor: not-allowed; }
 
     /* =========================================================
-       [E] 진행 중인 과제
+       8. [E] 진행 중인 과제
        ========================================================= */
     /* 상태별 색 (카드 상태 표시·진행률 막대에 사용) */
     .task-card { --status-color: var(--text-sub); }
@@ -774,85 +788,43 @@
     }
 
     /* =========================================================
-       설정 · 바로가기 편집 · 백업 창
+       9. [F] 바로가기 & 도구
        ========================================================= */
-    .dialog-wide { width: min(560px, calc(100% - 32px)); }
-    /* 내용이 길면 창 안에서 스크롤 */
-    .dialog { max-height: calc(100vh - 48px); }
-
-    .settings-section {
+    .area-tools {
       display: flex;
-      flex-direction: column;
-      gap: 10px;
-      padding-top: 16px;
-      border-top: 1px solid var(--line);
-    }
-    .settings-section h3 {
-      margin: 0;
-      font-size: 15px;
-      font-weight: 600;
-    }
-
-    /* 편집 줄 목록 (바로가기, 카테고리) */
-    .edit-rows {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .edit-row {
-      display: grid;
       align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding-top: 14px;
+      padding-bottom: 14px;
+    }
+    .tools-links {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .tools-title {
+      font-size: 14px;
+      color: var(--text-sub);
+      margin-right: 4px;
+    }
+    .tools-buttons { display: flex; gap: 8px; }
+    .link-list {
+      display: flex;
       gap: 8px;
+      flex-wrap: wrap;
     }
-    .link-row { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; }
-    .category-row { grid-template-columns: 44px minmax(0, 1fr) auto; }
-    .icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-    .icon-btn:disabled:hover { background: none; }
-
-    /* 색 고르기 칸 */
-    .color-input {
-      width: 44px;
-      height: 36px;
-      padding: 2px;
-      background: var(--bg);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      cursor: pointer;
-    }
-
-    .file-input {
-      font: inherit;
-      font-size: 14px;
-      color: var(--text-sub);
-      max-width: 100%;
-    }
-    .file-input::file-selector-button {
-      font: inherit;
+    /* 링크(a)도 버튼과 같은 모양으로 */
+    .link-btn {
       color: var(--text);
-      background: transparent;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 6px 14px;
-      margin-right: 10px;
-      cursor: pointer;
-    }
-    .import-preview {
-      margin: 0;
-      font-size: 14px;
-      padding: 10px 12px;
-      background: var(--bg);
-      border-left: 3px solid var(--warn);
-    }
-
-    .privacy-note {
-      margin: 0;
-      font-size: 12px;
-      line-height: 1.6;
-      color: var(--text-sub);
+      text-decoration: none;
+      display: inline-block;
     }
 
     /* =========================================================
-       입력 창(모달): 일정 추가/수정
+       10. 입력 창(모달): 일정·마감·과제·바로가기·설정·백업
        - <dialog>를 사용하면 Esc 닫기, 포커스 가두기가 기본으로 됩니다.
        ========================================================= */
     .dialog {
@@ -889,21 +861,6 @@
       grid-template-columns: 1fr 1fr;
       gap: 12px;
     }
-
-    .input {
-      width: 100%;
-      font: inherit;
-      color: var(--text);
-      background: var(--bg);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 8px 10px;
-    }
-    .input:focus-visible {
-      outline: 2px solid var(--text);
-      outline-offset: 0;
-    }
-    textarea.input { resize: vertical; min-height: 60px; }
 
     /* 반복 요일 선택 (월~금 체크 버튼) */
     .repeat-days {
@@ -962,7 +919,83 @@
     }
     .dialog-actions .spacer { flex: 1; }
 
-    /* 화면 아래에 잠깐 뜨는 알림 ("저장했어요" 등) */
+    /* ---------- 설정 · 바로가기 편집 · 백업 창 ---------- */
+    .dialog-wide { width: min(560px, calc(100% - 32px)); }
+    /* 내용이 길면 창 안에서 스크롤 */
+    .dialog { max-height: calc(100vh - 48px); }
+
+    .settings-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+    }
+    .settings-section h3 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    /* 편집 줄 목록 (바로가기, 카테고리) */
+    .edit-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .edit-row {
+      display: grid;
+      align-items: center;
+      gap: 8px;
+    }
+    .link-row { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; }
+    .category-row { grid-template-columns: 44px minmax(0, 1fr) auto; }
+
+    /* 색 고르기 칸 */
+    .color-input {
+      width: 44px;
+      height: 36px;
+      padding: 2px;
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .file-input {
+      font: inherit;
+      font-size: 14px;
+      color: var(--text-sub);
+      max-width: 100%;
+    }
+    .file-input::file-selector-button {
+      font: inherit;
+      color: var(--text);
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 6px 14px;
+      margin-right: 10px;
+      cursor: pointer;
+    }
+    .import-preview {
+      margin: 0;
+      font-size: 14px;
+      padding: 10px 12px;
+      background: var(--bg);
+      border-left: 3px solid var(--warn);
+    }
+
+    .privacy-note {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--text-sub);
+    }
+
+    /* =========================================================
+       11. 알림 (화면 아래에 잠깐 뜨는 메시지)
+       ========================================================= */
     .toast {
       position: fixed;
       left: 50%;
@@ -980,7 +1013,7 @@
     .toast.is-error { background: var(--danger); }
 
     /* =========================================================
-       7. 반응형 (화면 폭에 따라 배치 변경)
+       12. 반응형 · 동작 줄이기
        ========================================================= */
 
     /* 1366px 이하: [C]·[D]가 타임라인 아래로 내려가는 1단 구성 */
@@ -1022,6 +1055,9 @@
 </head>
 <body>
 
+  <!-- 화면 낭독기용 페이지 제목 (화면에는 보이지 않음) -->
+  <h1 class="sr-only">업무 커맨드센터</h1>
+
   <div class="app">
 
     <!-- ===================================================
@@ -1050,7 +1086,7 @@
     </header>
 
     <!-- ===================================================
-         [B] 이번 주 타임라인 (2단계에서 구현)
+         [B] 이번 주 타임라인
          =================================================== -->
     <section class="area area-timeline" aria-labelledby="timelineTitle">
       <div class="tl-head">
@@ -1550,19 +1586,19 @@
       return null;  // 알 수 없는 버전
     }
 
-    // 단계별로 새 기능이 생길 때, 그 영역이 비어 있으면 샘플을 한 번만 채워 줌
+    // 새 기능(영역)이 생길 때, 그 영역이 비어 있으면 샘플을 한 번만 채워 줌
     // - seeded 목록에 이름이 있으면 "이미 샘플을 넣은 적 있음" → 다시 넣지 않음
     //   (사용자가 일부러 다 지운 목록에 샘플이 되살아나지 않게)
     function fillNewSamples(target) {
       const sample = createSampleData();
       ["events", "deadlines", "tasks", "links"].forEach(key => {
         if (target.seeded.includes(key)) return;
-        if (sample[key].length === 0) return;   // 아직 샘플이 없는 영역은 다음 단계에서
+        if (sample[key].length === 0) return;   // 샘플이 없는 영역은 건너뜀
         if (target[key].length === 0) target[key] = sample[key];
         target.seeded.push(key);
       });
 
-      // 6단계 이전에 들어간 샘플에는 sample 표시가 없어서, 제목이 같은 항목에 한 번만 표시를 붙임
+      // 예전 버전에서 들어간 샘플에는 sample 표시가 없어서, 제목이 같은 항목에 한 번만 표시를 붙임
       if (!target.seeded.includes("sampleFlags")) {
         ["events", "tasks", "deadlines", "links"].forEach(key => {
           const sampleNames = sample[key].map(item => item.title || item.name);
@@ -1971,7 +2007,7 @@
     }
 
     // 일정 블록 하나 만들기
-    function createEventBlock(item, tlStart, hourPx) {
+    function createEventBlock(item, tlStart, hourPx, date) {
       const category = findCategory(item.event.categoryId);
       // 누르면 수정 창이 열리도록 버튼으로 만듦 (키보드 Tab으로도 이동 가능)
       const block = document.createElement("button");
@@ -2007,6 +2043,10 @@
 
       // 마우스를 올리면 전체 내용 표시 (블록이 좁아 글자가 잘릴 때 도움)
       block.title = `${item.event.title}\n${timeText} · ${category.name}`;
+      // 화면 낭독기용: "화요일 09:00–11:30 집중 업무 블록, 집중 업무, 반복 일정. 누르면 수정"
+      const repeatText = item.event.repeatDays.length ? ", 매주 반복" : "";
+      block.setAttribute("aria-label",
+        `${DAY_NAMES[date.getDay()]}요일 ${timeText} ${item.event.title}, ${category.name}${repeatText}. 누르면 수정`);
 
       block.addEventListener("click", () => openEventDialog({ event: item.event }));
       return block;
@@ -2096,7 +2136,7 @@
           .filter(item => item.endMin > item.startMin);  // 범위 밖 일정은 제외
 
         layoutDay(items).forEach(item => {
-          col.append(createEventBlock(item, tlStart, hourPx));
+          col.append(createEventBlock(item, tlStart, hourPx, date));
         });
         eventCount += items.length;
         grid.append(col);
@@ -2112,6 +2152,55 @@
 
       renderNowLine(today);
     }
+
+    /* ---------------------------------------------------------
+       큰 화면(1367px 이상)에서 타임라인 높이를 남는 공간에 맞추기
+       - 먼저: 1시간 높이를 최소값(44px)으로 그려 봄
+       - 다음: 타임라인 영역이 실제로 받은 높이를 재서, 그만큼 1시간 높이를 늘림
+         (최대 80px까지. 그 이상은 너무 듬성듬성해 보여서)
+       - 1366px 이하 화면에서는 기본값(--hour-h: 52px)을 그대로 씀
+       --------------------------------------------------------- */
+    const HOUR_MIN = 44;
+    const HOUR_MAX = 80;
+
+    function fitTimeline() {
+      const root = document.documentElement;
+      if (window.innerWidth <= 1366) {
+        if (root.style.getPropertyValue("--hour-h")) {
+          root.style.removeProperty("--hour-h");
+          renderTimeline();
+        }
+        return;
+      }
+      const hours = (timeToMinutes(data.settings.timelineEnd) - timeToMinutes(data.settings.timelineStart)) / 60;
+      const area = document.querySelector(".area-timeline");
+      const padBottom = parseFloat(getComputedStyle(area).paddingBottom);
+
+      // 먼저: 최소 높이로 그리기
+      root.style.setProperty("--hour-h", HOUR_MIN + "px");
+      renderTimeline();
+
+      // 다음: 시간 칸이 시작되는 위치부터 영역 아래 끝까지가 쓸 수 있는 높이
+      const firstCol = el.tlGrid.querySelector(".tl-col");
+      const usable = area.getBoundingClientRect().bottom - padBottom - firstCol.getBoundingClientRect().top;
+      const hourPx = Math.max(HOUR_MIN, Math.min(HOUR_MAX, Math.floor(usable / hours)));
+      root.style.setProperty("--hour-h", hourPx + "px");
+      renderTimeline();
+    }
+
+    // 여러 번 연달아 불려도 한 번만 맞추기 (화면 그리기 직전에 실행)
+    let fitRequested = false;
+    function scheduleFit() {
+      if (fitRequested) return;
+      fitRequested = true;
+      requestAnimationFrame(() => {
+        fitRequested = false;
+        fitTimeline();
+      });
+    }
+
+    // 브라우저 창 크기를 바꾸면 다시 맞추기
+    window.addEventListener("resize", scheduleFit);
 
     // 현재 시각 가로선 그리기 (오늘 열에만, 타임라인 시간 범위 안일 때만)
     function renderNowLine(now) {
@@ -2377,7 +2466,10 @@
       const details = document.createElement("details");
       details.className = "fold";
       details.open = foldOpen[key];
-      details.addEventListener("toggle", () => { foldOpen[key] = details.open; });
+      details.addEventListener("toggle", () => {
+        foldOpen[key] = details.open;
+        scheduleFit();  // 펼치면 영역이 길어지므로 타임라인 높이 다시 맞추기
+      });
 
       const summary = document.createElement("summary");
       summary.textContent = `${label} ${items.length}건`;
@@ -2415,6 +2507,8 @@
 
       if (past.length) box.append(createFold("past", "지난 마감", past, todayKey));
       if (done.length) box.append(createFold("done", "완료한 마감", done, todayKey));
+
+      scheduleFit();  // 영역 높이가 바뀌었을 수 있으니 타임라인 높이 다시 맞추기
     }
 
     // 마감 추가/수정 창 열기
@@ -2567,6 +2661,8 @@
       } else {
         el.todoRecord.hidden = true;
       }
+
+      scheduleFit();  // 영역 높이가 바뀌었을 수 있으니 타임라인 높이 다시 맞추기
     }
 
     // 할 일 추가 (Enter 또는 추가 버튼)
@@ -2729,6 +2825,8 @@
       const doneCount = data.tasks.filter(t => t.status === "완료").length;
       el.taskDoneNote.hidden = !(taskFilter === "전체" && doneCount > 0);
       el.taskDoneNote.textContent = `완료한 과제 ${doneCount}개는 숨겨져 있어요.`;
+
+      scheduleFit();  // 영역 높이가 바뀌었을 수 있으니 타임라인 높이 다시 맞추기
     }
 
     // 필터 버튼
@@ -3179,7 +3277,7 @@
     el.backupBtn.addEventListener("click", openBackupDialog);
     closeOnBackdrop(el.bkDialog);
 
-    // 모든 영역 다시 그리기 (설정 변경·가져오기 후)
+    // 모든 영역 다시 그리기 (처음 열 때, 설정 변경·가져오기 후, 날짜가 바뀔 때)
     function renderAll() {
       renderTimeline();
       renderDeadlines();
@@ -3187,6 +3285,7 @@
       renderTasks();
       renderLinks();
       renderCountdown(new Date());
+      scheduleFit();
     }
 
     /* =========================================================
@@ -3206,10 +3305,7 @@
       const dateKey = toDateKey(now);
       if (dateKey !== lastDateKey) {
         lastDateKey = dateKey;
-        renderTimeline();
-        renderDeadlines();
-        renderTodos();
-        renderTasks();
+        renderAll();
       } else if (now.getMinutes() !== lastMinute) {
         renderNowLine(now);
       }
@@ -3217,11 +3313,7 @@
     }
 
     // 처음 열었을 때 각 영역 그리기
-    renderTimeline();
-    renderDeadlines();
-    renderTodos();
-    renderTasks();
-    renderLinks();
+    renderAll();
     tick();                     // 시계도 바로 한 번 그리기
     setInterval(tick, 1000);    // 그 다음부터 1초마다 다시 그리기
   </script>

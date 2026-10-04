@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>업무 커맨드센터</title>
+
+  <style>
+    /* =========================================================
+       1. 디자인 변수 (색상·글꼴)
+       - 색을 바꾸고 싶으면 여기 값만 고치면 화면 전체에 반영됩니다.
+       ========================================================= */
+    :root {
+      /* 기본 색상: "야간 경기장의 전광판" */
+      --bg: #141B26;          /* 전체 배경 (깊은 남색) */
+      --surface: #1C2533;     /* 영역 배경 */
+      --line: #2B3747;        /* 구분선, 타임라인 격자 */
+      --text: #E4E9F0;        /* 본문 글자 */
+      --text-sub: #8B98AA;    /* 보조 글자, 시간 눈금 */
+      --scoreboard: #F4B740;  /* 전광판 앰버: 카운트다운·현재 시각 선 전용 */
+      --danger: #EE6C6A;      /* D-3 이내 마감 */
+      --warn: #E99A4F;        /* D-7 이내 마감 */
+
+      /* 카테고리 기본 색상 (2단계부터 일정 블록에 사용) */
+      --cat-meeting: #6FA8DC;   /* 회의 */
+      --cat-focus: #7CC4A4;     /* 집중 업무 */
+      --cat-external: #B394D9;  /* 외부 일정 */
+      --cat-admin: #9AA6B8;     /* 행정·결재 */
+      --cat-personal: #E58C78;  /* 개인(운동 등) */
+
+      /* 글꼴: 외부에서 불러오지 않고 PC에 설치된 글꼴을 순서대로 사용 */
+      --font: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+
+      /* 간격 */
+      --gap: 1px;        /* 영역 사이 구분선 두께 (배경색이 선처럼 보이게) */
+      --pad: 20px;       /* 영역 안쪽 여백 */
+    }
+
+    /* =========================================================
+       2. 기본 스타일 초기화
+       ========================================================= */
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html, body { margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 15px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    button {
+      font: inherit;
+      color: inherit;
+    }
+
+    /* 키보드(Tab)로 이동할 때 현재 위치가 잘 보이도록 포커스 테두리 표시 */
+    :focus-visible {
+      outline: 2px solid var(--text);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+
+    /* 숫자 자릿수가 흔들리지 않게 (시계·카운트다운·D-day·진행률) */
+    .num { font-variant-numeric: tabular-nums; }
+
+    /* =========================================================
+       3. 전체 레이아웃 (격자)
+       - 위에서부터: [A] 상단 바 / [B]+[C][D] / [E] / [F]
+       - 영역 사이 1px 틈으로 --line 색이 비쳐 구분선 역할을 합니다.
+       ========================================================= */
+    .app {
+      display: grid;
+      grid-template-columns: minmax(0, 68fr) minmax(0, 32fr); /* 타임라인 약 68% */
+      grid-template-areas:
+        "top      top"
+        "timeline side"
+        "tasks    tasks"
+        "tools    tools";
+      grid-template-rows: auto minmax(560px, 1fr) auto auto;
+      gap: var(--gap);
+      background: var(--line);  /* 틈 사이로 보이는 구분선 색 */
+      min-height: 100vh;
+    }
+
+    .area {
+      background: var(--surface);
+      padding: var(--pad);
+      min-width: 0;  /* 내용이 길어도 격자가 넘치지 않게 */
+    }
+
+    /* 각 영역의 격자 위치 지정 */
+    .area-top      { grid-area: top; background: var(--bg); }
+    .area-timeline { grid-area: timeline; }
+    .area-tasks    { grid-area: tasks; }
+    .area-tools    { grid-area: tools; background: var(--bg); }
+
+    /* 오른쪽 열: [C] 마감 + [D] 오늘 할 일을 위아래로 */
+    .side {
+      grid-area: side;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      gap: var(--gap);
+      background: var(--line);
+      min-width: 0;
+    }
+
+    /* 아직 만들지 않은 영역에 보여줄 안내 문구 */
+    .placeholder {
+      color: var(--text-sub);
+      font-size: 14px;
+      margin: 0;
+    }
+
+    /* =========================================================
+       4. [A] 상단 바
+       ========================================================= */
+    .area-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px 40px;
+      padding-top: 16px;
+      padding-bottom: 16px;
+    }
+
+    /* 왼쪽: 날짜 + 시계 */
+    .clock {
+      display: flex;
+      align-items: baseline;
+      gap: 20px;
+    }
+    .clock-date {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .clock-time {
+      font-size: 18px;
+      color: var(--text-sub);
+    }
+
+    /* 오른쪽: 퇴근 카운트다운 (화면에서 유일하게 강하게 빛나는 요소) */
+    .countdown {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+    .countdown-label {
+      font-size: 14px;
+      color: var(--text-sub);
+    }
+    .countdown-value {
+      font-size: 44px;
+      font-weight: 700;
+      line-height: 1.1;
+      color: var(--scoreboard);
+      white-space: nowrap;
+    }
+    /* "시간", "분" 같은 단위 글자는 숫자보다 작게 */
+    .countdown-value .unit {
+      font-size: 20px;
+      font-weight: 600;
+      margin: 0 8px 0 2px;
+    }
+    .countdown-value .unit:last-child { margin-right: 0; }
+
+    /* 상태 문구("출근 전", "퇴근 완료", "주말")일 때는 차분한 색으로 */
+    .countdown-value.is-status {
+      font-size: 28px;
+      color: var(--text-sub);
+    }
+
+    /* 오늘 근무 진행률 막대 */
+    .workbar {
+      width: 200px;
+      height: 8px;
+      background: var(--line);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .workbar-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--scoreboard);
+      border-radius: 4px;
+      transition: width 0.6s ease;
+    }
+    .workbar-text {
+      font-size: 13px;
+      color: var(--text-sub);
+      margin-top: 4px;
+    }
+
+    /* =========================================================
+       5. [F] 바로가기 & 도구
+       ========================================================= */
+    .area-tools {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding-top: 14px;
+      padding-bottom: 14px;
+    }
+    .tools-links {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .tools-title {
+      font-size: 14px;
+      color: var(--text-sub);
+      margin-right: 4px;
+    }
+    .tools-buttons { display: flex; gap: 8px; }
+
+    /* 기본 버튼 모양: 얇은 테두리만 있는 조용한 버튼 */
+    .btn {
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .btn:hover { background: var(--surface); }
+    .btn:disabled {
+      cursor: not-allowed;
+      color: var(--text-sub);
+    }
+    .btn:disabled:hover { background: transparent; }
+
+    /* =========================================================
+       6. 반응형 (화면 폭에 따라 배치 변경)
+       ========================================================= */
+
+    /* 1366px 이하: [C]·[D]가 타임라인 아래로 내려가는 1단 구성 */
+    @media (max-width: 1366px) {
+      .app {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+          "top"
+          "timeline"
+          "side"
+          "tasks"
+          "tools";
+        grid-template-rows: auto minmax(520px, auto) auto auto auto;
+      }
+      /* 마감과 할 일은 좌우로 나란히 */
+      .side {
+        grid-template-rows: none;
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    /* 태블릿 세로 폭 이하: 마감과 할 일도 위아래로 */
+    @media (max-width: 820px) {
+      :root { --pad: 16px; }
+      .side { grid-template-columns: 1fr; }
+      .countdown { gap: 16px; flex-wrap: wrap; }
+      .countdown-value { font-size: 40px; }
+      .workbar { width: 160px; }
+    }
+
+    /* "동작 줄이기" 설정을 켠 사용자에게는 애니메이션 끄기 */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        transition: none !important;
+        animation: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app">
+
+    <!-- ===================================================
+         [A] 상단 바: 날짜, 시계, 퇴근 카운트다운
+         =================================================== -->
+    <header class="area area-top">
+      <div class="clock">
+        <div class="clock-date" id="clockDate">-</div>
+        <div class="clock-time num" id="clockTime">--:--:--</div>
+      </div>
+
+      <div class="countdown">
+        <div>
+          <div class="countdown-label" id="countdownLabel">퇴근까지</div>
+          <!-- aria-live: 화면 낭독기가 1초마다 읽지 않도록 꺼둠 -->
+          <div class="countdown-value num" id="countdownValue" aria-live="off">-</div>
+        </div>
+        <div>
+          <div class="workbar" role="progressbar" aria-label="오늘 근무 진행률"
+               aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="workbar">
+            <div class="workbar-fill" id="workbarFill"></div>
+          </div>
+          <div class="workbar-text num" id="workbarText">근무 시간 -</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ===================================================
+         [B] 이번 주 타임라인 (2단계에서 구현)
+         =================================================== -->
+    <section class="area area-timeline" aria-labelledby="timelineTitle">
+      <h2 id="timelineTitle">이번 주 타임라인</h2>
+      <p class="placeholder">월~금 일정 타임라인이 들어올 자리예요. (2단계)</p>
+    </section>
+
+    <!-- 오른쪽 열 -->
+    <div class="side">
+      <!-- [C] 다가오는 마감 (4단계에서 구현) -->
+      <section class="area" aria-labelledby="deadlineTitle">
+        <h2 id="deadlineTitle">다가오는 마감</h2>
+        <p class="placeholder">마감일과 D-day가 들어올 자리예요. (4단계)</p>
+      </section>
+
+      <!-- [D] 오늘 할 일 3가지 (4단계에서 구현) -->
+      <section class="area" aria-labelledby="todoTitle">
+        <h2 id="todoTitle">오늘 할 일 3가지</h2>
+        <p class="placeholder">오늘 꼭 할 일 3개를 적는 자리예요. (4단계)</p>
+      </section>
+    </div>
+
+    <!-- ===================================================
+         [E] 진행 중인 과제 (5단계에서 구현)
+         =================================================== -->
+    <section class="area area-tasks" aria-labelledby="tasksTitle">
+      <h2 id="tasksTitle">진행 중인 과제</h2>
+      <p class="placeholder">과제 카드와 진행률이 들어올 자리예요. (5단계)</p>
+    </section>
+
+    <!-- ===================================================
+         [F] 바로가기 & 도구 (6단계에서 구현)
+         =================================================== -->
+    <footer class="area area-tools">
+      <div class="tools-links">
+        <span class="tools-title">바로가기</span>
+        <span class="placeholder">자주 쓰는 사이트 버튼이 들어올 자리예요. (6단계)</span>
+      </div>
+      <div class="tools-buttons">
+        <button type="button" class="btn" disabled title="6단계에서 연결돼요">설정</button>
+        <button type="button" class="btn" disabled title="6단계에서 연결돼요">백업</button>
+      </div>
+    </footer>
+
+  </div>
+
+  <script>
+    /* =========================================================
+       1. 설정값
+       - 지금은 기본값을 직접 적어두고,
+         6단계에서 설정 화면과 저장 기능에 연결할 예정입니다.
+       ========================================================= */
+    const settings = {
+      workStart: "08:00",  // 출근 시각
+      workEnd: "17:00"     // 퇴근 시각
+    };
+
+    const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
+
+    /* =========================================================
+       2. 작은 도우미 함수들
+       ========================================================= */
+
+    // 한 자리 숫자 앞에 0 붙이기 (예: 5 → "05")
+    function pad2(n) {
+      return String(n).padStart(2, "0");
+    }
+
+    // "08:30" 같은 글자를 "자정부터 몇 분째인지" 숫자로 바꾸기 (예: "08:30" → 510)
+    function timeToMinutes(text) {
+      const [h, m] = text.split(":").map(Number);
+      return h * 60 + m;
+    }
+
+    // 화면 요소를 id로 찾아두기
+    const el = {
+      clockDate: document.getElementById("clockDate"),
+      clockTime: document.getElementById("clockTime"),
+      countdownLabel: document.getElementById("countdownLabel"),
+      countdownValue: document.getElementById("countdownValue"),
+      workbar: document.getElementById("workbar"),
+      workbarFill: document.getElementById("workbarFill"),
+      workbarText: document.getElementById("workbarText")
+    };
+
+    /* =========================================================
+       3. [A] 날짜와 시계 그리기
+       ========================================================= */
+    function renderClock(now) {
+      // 예: "10월 6일 화요일"
+      el.clockDate.textContent =
+        `${now.getMonth() + 1}월 ${now.getDate()}일 ${DAY_NAMES[now.getDay()]}요일`;
+
+      // 예: "14:32:05"
+      el.clockTime.textContent =
+        `${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
+    }
+
+    /* =========================================================
+       4. [A] 퇴근 카운트다운 그리기
+       - 주말 → "주말"
+       - 출근 시각 전 → "출근 전"
+       - 근무 중 → "2시간 27분" + 진행률 막대
+       - 퇴근 시각 후 → "퇴근 완료"
+       ========================================================= */
+
+    // 카운트다운 칸에 상태 문구 보여주기 ("출근 전", "주말" 등)
+    function showStatus(text) {
+      el.countdownValue.textContent = text;
+      el.countdownValue.classList.add("is-status");
+    }
+
+    // 카운트다운 칸에 "2시간 27분" 형식으로 남은 시간 보여주기
+    function showRemaining(totalMinutes) {
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+
+      el.countdownValue.classList.remove("is-status");
+      el.countdownValue.textContent = "";  // 기존 내용 비우기
+
+      // 숫자와 단위를 따로 만들어 단위만 작게 표시
+      // (textContent만 사용해 안전하게 화면에 넣음)
+      function addPart(number, unitText) {
+        el.countdownValue.append(String(number));
+        const unit = document.createElement("span");
+        unit.className = "unit";
+        unit.textContent = unitText;
+        el.countdownValue.append(unit);
+      }
+
+      if (hours > 0) addPart(hours, "시간");
+      addPart(minutes, "분");
+    }
+
+    // 진행률 막대 채우기 (0~100)
+    function setWorkProgress(percent) {
+      const value = Math.round(percent);
+      el.workbarFill.style.width = value + "%";
+      el.workbar.setAttribute("aria-valuenow", value);
+    }
+
+    function renderCountdown(now) {
+      const day = now.getDay();             // 0=일요일, 6=토요일
+      const start = timeToMinutes(settings.workStart);
+      const end = timeToMinutes(settings.workEnd);
+      // 지금이 자정부터 몇 분째인지 (초까지 반영해 소수로 계산)
+      const nowMin = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+
+      el.workbarText.textContent = `근무 시간 ${settings.workStart}–${settings.workEnd}`;
+
+      // 주말
+      if (day === 0 || day === 6) {
+        el.countdownLabel.textContent = "오늘은";
+        showStatus("주말");
+        setWorkProgress(0);
+        return;
+      }
+
+      // 출근 전
+      if (nowMin < start) {
+        el.countdownLabel.textContent = "지금은";
+        showStatus("출근 전");
+        setWorkProgress(0);
+        return;
+      }
+
+      // 퇴근 후
+      if (nowMin >= end) {
+        el.countdownLabel.textContent = "오늘 근무";
+        showStatus("퇴근 완료");
+        setWorkProgress(100);
+        return;
+      }
+
+      // 근무 중: 남은 시간을 분 단위로 내림 (예: 2시간 27분 55초 → "2시간 27분")
+      el.countdownLabel.textContent = "퇴근까지";
+      showRemaining(Math.floor(end - nowMin));
+      setWorkProgress(((nowMin - start) / (end - start)) * 100);
+    }
+
+    /* =========================================================
+       5. 1초마다 화면 갱신
+       ========================================================= */
+    function tick() {
+      const now = new Date();
+      renderClock(now);
+      renderCountdown(now);
+    }
+
+    tick();                     // 처음 열었을 때 바로 한 번 그리기
+    setInterval(tick, 1000);    // 그 다음부터 1초마다 다시 그리기
+  </script>
+</body>
+</html>

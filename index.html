@@ -1279,6 +1279,167 @@
     .toast.is-error { background: var(--danger); }
 
     /* =========================================================
+       [R] 루틴 화면
+       ========================================================= */
+    /* 상단 화면 전환 버튼 */
+    .view-switch {
+      display: flex;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .view-btn {
+      font: inherit;
+      font-size: 14px;
+      color: var(--text-sub);
+      background: none;
+      border: 0;
+      border-left: 1px solid var(--line);
+      padding: 6px 14px;
+      cursor: pointer;
+    }
+    .view-btn:first-child { border-left: 0; }
+    .view-btn:hover { color: var(--text); }
+    .view-btn[aria-pressed="true"] { background: var(--line); color: var(--text); font-weight: 600; }
+
+    .area-routine { grid-area: routine; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+    .rt-head { display: flex; align-items: center; gap: 12px 20px; flex-wrap: wrap; }
+    .rt-head h2 { margin: 0; }
+    .rt-month { display: flex; align-items: center; gap: 6px; }
+    .rt-month-label { font-size: 16px; font-weight: 600; min-width: 104px; text-align: center; }
+    #rtThisMonth[aria-pressed="true"] { background: var(--line); }
+    #rtManage { margin-left: auto; }
+    .rt-empty { display: flex; flex-direction: column; gap: 12px; padding: 24px 0; }
+    .rt-content { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+
+    /* 통계: [숫자들] [주별 차트] / [일일 차트] */
+    .rt-stats {
+      display: grid;
+      grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+      gap: 16px;
+    }
+    .rt-chart-wide { grid-column: 1 / -1; }
+    .rt-kpis, .rt-chart {
+      background: var(--bg);
+      border-radius: 6px;
+      padding: 16px;
+      margin: 0;
+      min-width: 0;
+    }
+    .rt-kpis { display: flex; flex-direction: column; gap: 16px; }
+    .rt-hero { display: flex; flex-direction: column; gap: 6px; }
+    .rt-kpi-label { font-size: 13px; color: var(--text-sub); }
+    .rt-hero-value { font-size: 48px; font-weight: 700; line-height: 1.1; font-variant-numeric: proportional-nums; }
+    .rt-kpi-sub { font-size: 12px; color: var(--text-sub); }
+    .rt-meter { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+    .rt-meter-fill { height: 100%; width: 0; background: var(--cat-focus); border-radius: 4px; }
+    .rt-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .rt-tile { display: flex; flex-direction: column; gap: 2px; padding-top: 12px; border-top: 1px solid var(--line); }
+    .rt-tile-value { font-size: 20px; font-weight: 600; }
+    .rt-chart figcaption { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+    .rt-chart-note { font-weight: 400; font-size: 12px; color: var(--text-sub); }
+
+    /* 세로 막대 차트 (한 가지 색: 달성) */
+    .col-chart {
+      position: relative;
+      height: 180px;
+      padding-left: 36px;      /* 왼쪽 눈금 글자 자리 */
+      padding-bottom: 20px;    /* 아래 날짜 글자 자리 */
+    }
+    .cc-grid { position: absolute; left: 36px; right: 0; top: 0; bottom: 20px; }
+    .cc-line { position: absolute; left: 0; right: 0; height: 1px; background: var(--line); }
+    .cc-tick { position: absolute; right: calc(100% + 6px); top: -7px; font-size: 11px; color: var(--text-sub); }
+    .cc-cols { position: relative; display: flex; height: 100%; gap: 2px; }
+    .cc-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; }
+    .cc-plot {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      border-radius: 4px;
+      cursor: default;
+    }
+    .cc-plot:hover, .cc-plot:focus-visible { background: rgba(255, 255, 255, 0.04); }
+    .cc-bar {
+      width: 100%;
+      max-width: 24px;
+      background: var(--cat-focus);
+      border-radius: 4px 4px 0 0;  /* 끝만 둥글게, 바닥은 반듯하게 */
+    }
+    .cc-bar.is-zero { height: 2px !important; background: var(--line); }
+    .cc-value { position: absolute; font-size: 12px; color: var(--text); }
+    .cc-label { height: 20px; line-height: 20px; font-size: 11px; color: var(--text-sub); white-space: nowrap; }
+    .cc-col.is-mark .cc-label { color: var(--text); font-weight: 700; }
+    .col-chart.is-compact .cc-label { font-size: 10px; }
+
+    /* 차트 말풍선 */
+    .chart-tip {
+      position: fixed;
+      z-index: 20;
+      background: var(--text);
+      color: var(--bg);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 10px;
+      border-radius: 6px;
+      pointer-events: none;
+      max-width: 260px;
+    }
+
+    /* 체크 표 */
+    .rt-grid-wrap { overflow-x: auto; border-radius: 6px; background: var(--bg); }
+    .rt-grid { border-collapse: separate; border-spacing: 0; font-size: 13px; width: 100%; }
+    .rt-grid th, .rt-grid td { padding: 0; text-align: center; }
+    .rt-grid thead th { color: var(--text-sub); font-weight: 600; height: 26px; border-bottom: 1px solid var(--line); }
+    .rt-grid .rt-week { color: var(--text); background: var(--line); border-left: 2px solid var(--bg); }
+    .rt-grid .rt-day { min-width: 30px; }
+    .rt-grid .rt-day.is-sat { color: var(--cat-meeting); }
+    .rt-grid .rt-day.is-sun, .rt-grid .rt-day.is-holiday { color: var(--danger); }
+    .rt-grid .is-today { background: var(--today); }
+    .rt-grid th.rt-day.is-today { color: var(--text); }
+    .rt-grid .week-start { border-left: 2px solid var(--line); }
+    .rt-grid td { height: 34px; border-bottom: 1px solid var(--line); }
+    .rt-grid .rt-check { width: 18px; height: 18px; accent-color: var(--cat-focus); }
+    .rt-grid .rt-check:disabled { opacity: 0.25; cursor: not-allowed; }
+    /* 루틴 이름 열: 옆으로 밀어도 고정 */
+    .rt-grid .rt-name-col {
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      background: var(--surface);
+      text-align: left;
+      padding: 0 12px;
+      min-width: 140px;
+      max-width: 200px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text);
+      font-weight: 600;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    /* 분석 표 */
+    .rt-sub-title { margin: 0 0 8px; font-size: 15px; font-weight: 600; }
+    .rt-analysis-wrap { overflow-x: auto; }
+    .rt-analysis { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .rt-analysis th, .rt-analysis td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+    .rt-analysis thead th { font-size: 12px; color: var(--text-sub); font-weight: 600; }
+    .rt-analysis th:first-child { text-align: left; font-weight: 600; }
+    .rt-analysis thead th:last-child { text-align: left; }
+    .rt-bar-cell { display: flex; align-items: center; gap: 10px; min-width: 200px; text-align: left !important; }
+    .rt-row-meter { flex: 1; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+    .rt-row-meter > div { height: 100%; background: var(--cat-focus); border-radius: 4px; }
+    .rt-bar-cell span { width: 40px; text-align: right; }
+
+    /* 루틴 관리 창 줄: 이름 + ▲ ▼ × */
+    .routine-row { grid-template-columns: minmax(0, 1fr) auto auto auto; }
+
+    /* =========================================================
        12. 반응형 · 동작 줄이기
        ========================================================= */
 
@@ -1335,6 +1496,20 @@
         animation: none !important;
       }
     }
+
+    /* 루틴 화면일 때: 대시보드 영역을 숨기고 루틴 영역을 넓게 */
+    .app.view-routine {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-areas: "top" "routine" "tools";
+      grid-template-rows: auto 1fr auto;
+    }
+    .app.view-routine .area-timeline,
+    .app.view-routine .side,
+    .app.view-routine .area-tasks { display: none; }
+    @media (max-width: 820px) {
+      .rt-stats { grid-template-columns: minmax(0, 1fr); }
+      #rtManage { margin-left: 0; }
+    }
   </style>
 </head>
 <body>
@@ -1348,6 +1523,11 @@
          [A] 상단 바: 날짜, 시계, 퇴근 카운트다운
          =================================================== -->
     <header class="area area-top">
+      <!-- 화면 전환: 대시보드 / 루틴 -->
+      <nav class="view-switch" id="viewSwitch" aria-label="화면 전환">
+        <button type="button" class="view-btn" data-view="dashboard" aria-pressed="true">대시보드</button>
+        <button type="button" class="view-btn" data-view="routine" aria-pressed="false">루틴</button>
+      </nav>
       <div class="clock">
         <div class="clock-date" id="clockDate">-</div>
         <div class="clock-time num" id="clockTime">--:--:--</div>
@@ -1463,6 +1643,82 @@
       <!-- 과제 카드는 JavaScript가 채웁니다 (renderTasks 함수) -->
       <div class="task-grid" id="taskGrid"></div>
       <p class="form-hint" id="taskDoneNote" hidden></p>
+    </section>
+
+    <!-- ===================================================
+         [R] 루틴 화면 (상단 '루틴' 버튼으로 전환)
+         =================================================== -->
+    <section class="area area-routine" id="routineView" aria-labelledby="rtTitle" hidden>
+      <div class="rt-head">
+        <h2 id="rtTitle">루틴</h2>
+        <div class="rt-month" role="group" aria-label="달 이동">
+          <button type="button" class="btn btn-small" id="rtPrev" aria-label="지난달">◀</button>
+          <span class="rt-month-label num" id="rtMonthLabel"></span>
+          <button type="button" class="btn btn-small" id="rtNext" aria-label="다음 달">▶</button>
+          <button type="button" class="btn btn-small" id="rtThisMonth">이번 달</button>
+        </div>
+        <button type="button" class="btn btn-small" id="rtManage">루틴 관리</button>
+      </div>
+
+      <!-- 루틴이 없을 때 -->
+      <div class="rt-empty" id="rtEmpty" hidden>
+        <p class="empty-text">아직 루틴이 없어요. 매일 지키고 싶은 습관을 추가해 보세요.</p>
+        <div class="cloud-actions">
+          <button type="button" class="btn btn-primary" id="rtAddFirst">루틴 추가</button>
+          <button type="button" class="btn" id="rtSample">예시 루틴 넣기</button>
+        </div>
+      </div>
+
+      <div class="rt-content" id="rtContent">
+        <!-- 통계 -->
+        <div class="rt-stats">
+          <div class="rt-kpis">
+            <div class="rt-hero">
+              <span class="rt-kpi-label" id="rtHeroLabel">오늘까지 달성률</span>
+              <span class="rt-hero-value num" id="rtHeroValue">—</span>
+              <div class="rt-meter" id="rtMeter" role="progressbar" aria-label="달성률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <div class="rt-meter-fill" id="rtMeterFill"></div>
+              </div>
+              <span class="rt-kpi-sub num" id="rtHeroSub"></span>
+            </div>
+            <div class="rt-tiles">
+              <div class="rt-tile"><span class="rt-kpi-label">완료</span><span class="rt-tile-value num" id="rtDone">0</span></div>
+              <div class="rt-tile"><span class="rt-kpi-label">남음</span><span class="rt-tile-value num" id="rtLeft">0</span></div>
+              <div class="rt-tile" id="rtTodayTile"><span class="rt-kpi-label">오늘</span><span class="rt-tile-value num" id="rtToday">0/0</span></div>
+            </div>
+          </div>
+          <figure class="rt-chart">
+            <figcaption>주별 달성률 <span class="rt-chart-note">(1주 = 1~7일)</span></figcaption>
+            <div class="col-chart" id="rtWeekChart"></div>
+          </figure>
+          <figure class="rt-chart rt-chart-wide">
+            <figcaption>일일 달성률</figcaption>
+            <div class="col-chart" id="rtDayChart"></div>
+          </figure>
+        </div>
+
+        <!-- 날짜별 체크 표 -->
+        <div class="rt-grid-wrap" id="rtGridWrap">
+          <table class="rt-grid" id="rtGrid"></table>
+        </div>
+
+        <!-- 루틴별 분석 -->
+        <div class="rt-analysis-wrap">
+          <h3 class="rt-sub-title">분석</h3>
+          <table class="rt-analysis">
+            <thead>
+              <tr>
+                <th scope="col">루틴</th>
+                <th scope="col" id="rtAnalysisGoal">목표</th>
+                <th scope="col">실제</th>
+                <th scope="col">남음</th>
+                <th scope="col">진행률 (이번 달 기준)</th>
+              </tr>
+            </thead>
+            <tbody id="rtAnalysisBody"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <!-- ===================================================
@@ -1866,6 +2122,29 @@
     </div>
   </dialog>
 
+  <!-- ===================================================
+       루틴 관리 창
+       =================================================== -->
+  <dialog class="dialog dialog-wide" id="routineDialog" aria-labelledby="routineDialogTitle">
+    <form class="dialog-form" id="routineForm" novalidate>
+      <h2 id="routineDialogTitle">루틴 관리</h2>
+      <p class="form-hint">매일 체크할 루틴을 적어 주세요. 이모지도 넣을 수 있어요. ▲▼로 순서를 바꾸고, ×로 지워요.</p>
+      <div class="edit-rows" id="rmRows"></div>
+      <div>
+        <button type="button" class="btn btn-small" id="rmAddRow">루틴 추가</button>
+      </div>
+      <p class="form-error" id="rmError" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button type="button" class="btn" id="rmCancel">취소</button>
+        <button type="submit" class="btn btn-primary">저장</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 차트 막대에 마우스를 올리면 뜨는 말풍선 -->
+  <div class="chart-tip" id="chartTip" role="tooltip" hidden></div>
+
   <!-- 잠깐 떴다 사라지는 알림 -->
   <div class="toast" id="toast" role="status" hidden></div>
 
@@ -2034,6 +2313,8 @@
         ],
         todayTodos: {},   // { "2026-10-06": [ { text, done } ] } 날짜별 목록
         offDays: [],      // 내가 넣은 쉬는 날 (연차·임시공휴일 등): [ { id, date, name } ]
+        routines: [],     // 루틴: [ { id, name } ]
+        routineChecks: {},// 루틴 체크: { "2026-10-07|루틴id": true }
         links: [
           { id: makeId(), name: "나라장터", url: "https://www.g2b.go.kr/" },
           { id: makeId(), name: "예시: 국가법령정보센터", url: "https://www.law.go.kr/" },
@@ -2083,7 +2364,8 @@
         linkedUid: saved.linkedUid || null,
         unsynced: saved.unsynced === true || saved.dirty === true,  // dirty는 예전 이름
         lastBackup: typeof saved.lastBackup === "string" ? saved.lastBackup : null,
-        timelineCollapsed: typeof saved.timelineCollapsed === "boolean" ? saved.timelineCollapsed : null  // null = 기본값
+        timelineCollapsed: typeof saved.timelineCollapsed === "boolean" ? saved.timelineCollapsed : null,  // null = 기본값
+        view: saved.view === "routine" ? "routine" : "dashboard"   // 마지막으로 본 화면
       };
     })();
     function saveDevice() {
@@ -2222,6 +2504,17 @@
             url: l.url,
             ...(l.sample === true ? { sample: true } : {})
           })),
+        routines: (Array.isArray(raw.routines) ? raw.routines : [])
+          .filter(r => r && typeof r.name === "string" && r.name.trim())
+          .map(r => ({ id: r.id || makeId(), name: r.name.trim().slice(0, 30) })),
+        routineChecks: (() => {
+          const out = {};
+          const src = raw.routineChecks && typeof raw.routineChecks === "object" ? raw.routineChecks : {};
+          Object.keys(src).forEach(key => {
+            if (src[key] === true && /^\d{4}-\d{2}-\d{2}\|[\w-]{1,40}$/.test(key)) out[key] = true;
+          });
+          return out;
+        })(),
         offDays: (Array.isArray(raw.offDays) ? raw.offDays : [])
           .filter(d => d && isDate(d.date) && typeof d.name === "string" && d.name.trim())
           .map(d => ({ id: d.id || makeId(), date: d.date, name: d.name.trim().slice(0, 20) })),
@@ -2229,7 +2522,7 @@
       };
 
       // id 정리: 글자·숫자가 아니거나 겹치는 id는 새로 붙임 (겹치면 하나를 고칠 때 다른 것이 바뀌는 문제 방지)
-      ["events", "tasks", "deadlines", "links", "offDays"].forEach(key => {
+      ["events", "tasks", "deadlines", "links", "offDays", "routines"].forEach(key => {
         const seen = new Set();
         result[key].forEach(item => {
           if (typeof item.id !== "string" || !/^[\w-]{1,40}$/.test(item.id) || seen.has(item.id)) item.id = makeId();
@@ -2423,6 +2716,40 @@
       lkAddRow: document.getElementById("lkAddRow"),
       lkError: document.getElementById("lkError"),
       lkCancel: document.getElementById("lkCancel"),
+      // 루틴
+      viewSwitch: document.getElementById("viewSwitch"),
+      routineView: document.getElementById("routineView"),
+      rtPrev: document.getElementById("rtPrev"),
+      rtNext: document.getElementById("rtNext"),
+      rtThisMonth: document.getElementById("rtThisMonth"),
+      rtMonthLabel: document.getElementById("rtMonthLabel"),
+      rtManage: document.getElementById("rtManage"),
+      rtEmpty: document.getElementById("rtEmpty"),
+      rtAddFirst: document.getElementById("rtAddFirst"),
+      rtSample: document.getElementById("rtSample"),
+      rtContent: document.getElementById("rtContent"),
+      rtHeroLabel: document.getElementById("rtHeroLabel"),
+      rtHeroValue: document.getElementById("rtHeroValue"),
+      rtHeroSub: document.getElementById("rtHeroSub"),
+      rtMeter: document.getElementById("rtMeter"),
+      rtMeterFill: document.getElementById("rtMeterFill"),
+      rtDone: document.getElementById("rtDone"),
+      rtLeft: document.getElementById("rtLeft"),
+      rtToday: document.getElementById("rtToday"),
+      rtTodayTile: document.getElementById("rtTodayTile"),
+      rtWeekChart: document.getElementById("rtWeekChart"),
+      rtDayChart: document.getElementById("rtDayChart"),
+      rtGridWrap: document.getElementById("rtGridWrap"),
+      rtGrid: document.getElementById("rtGrid"),
+      rtAnalysisGoal: document.getElementById("rtAnalysisGoal"),
+      rtAnalysisBody: document.getElementById("rtAnalysisBody"),
+      rmDialog: document.getElementById("routineDialog"),
+      rmForm: document.getElementById("routineForm"),
+      rmRows: document.getElementById("rmRows"),
+      rmAddRow: document.getElementById("rmAddRow"),
+      rmError: document.getElementById("rmError"),
+      rmCancel: document.getElementById("rmCancel"),
+      chartTip: document.getElementById("chartTip"),
       // 설정
       settingsBtn: document.getElementById("settingsBtn"),
       stDialog: document.getElementById("settingsDialog"),
@@ -2721,6 +3048,16 @@
       const toDeadlines = () => focusPanel(el.dlBody.closest(".panel"), el.dlAdd);
       if (overdue) el.glance.append(glanceItem({ label: "지난 마감", title: `${overdue}건`, tone: "danger", onClick: toDeadlines }));
       if (soon) el.glance.append(glanceItem({ label: "3일 이내 마감", title: `${soon}건`, tone: "warn", onClick: toDeadlines }));
+
+      // ── 오늘 루틴 (루틴이 있을 때만) ──
+      if (data.routines.length) {
+        const doneToday = data.routines.filter(r => data.routineChecks[`${todayKey}|${r.id}`]).length;
+        el.glance.append(glanceItem({
+          label: "루틴", title: `${doneToday}/${data.routines.length}`,
+          onClick: () => setView("routine"),
+          aria: `오늘 루틴 ${data.routines.length}개 중 ${doneToday}개 완료. 누르면 루틴 화면`
+        }));
+      }
 
       // ── 2주 안의 쉬는 날 (오늘 제외) ──
       for (let i = 1; i <= 14; i++) {
@@ -3148,6 +3485,7 @@
     function fitTimeline() {
       const root = document.documentElement;
       if (isTimelineCollapsed()) return;   // 접혀 있으면 맞출 필요 없음
+      if (currentView === "routine") return;  // 루틴 화면에서는 타임라인이 숨어 있음
       if (window.innerWidth <= 1366) {
         if (root.style.getPropertyValue("--hour-h")) {
           root.style.removeProperty("--hour-h");
@@ -4513,9 +4851,436 @@
     el.backupBtn.addEventListener("click", openBackupDialog);
     closeOnBackdrop(el.bkDialog);
 
+    /* =========================================================
+       13-2. 루틴 (매일 체크 + 달성 통계)
+       - 루틴: data.routines = [ { id, name } ]
+       - 체크: data.routineChecks = { "2026-10-07|루틴id": true }
+         (날짜+루틴 한 칸씩 따로 저장 → 두 기기에서 다른 칸을 체크해도 합쳐짐)
+       - 화면: 월 이동 · 통계(달성률·완료·남음·오늘, 주별·일일 달성률) · 체크 표 · 분석 표
+       ========================================================= */
+    const EXAMPLE_ROUTINES = ["5시 기상 ⏰", "운동 💪", "독서 📖", "공부 ✏️", "물 2L 💧", "명상 🧘"];
+    let routineMonth = { y: new Date().getFullYear(), m: new Date().getMonth() };  // 보고 있는 달 (m: 0=1월)
+    let routineScrollTo = true;   // 다음에 그릴 때 오늘 칸으로 스크롤할지 (달을 바꿨을 때만)
+
+    const checkKey = (dateKey, routineId) => `${dateKey}|${routineId}`;
+    const isChecked = (dateKey, routineId) => data.routineChecks[checkKey(dateKey, routineId)] === true;
+
+    // 보고 있는 달의 날짜 정보
+    function monthInfo() {
+      const { y, m } = routineMonth;
+      const days = new Date(y, m + 1, 0).getDate();
+      const todayKey = toDateKey(new Date());
+      const keys = Array.from({ length: days }, (_, i) => toDateKey(new Date(y, m, i + 1)));
+      // 오늘까지 지난 날 수 (지난달이면 전부, 다음 달이면 0)
+      const elapsed = keys.filter(k => k <= todayKey).length;
+      return { y, m, days, keys, todayKey, elapsed };
+    }
+
+    // 그날 체크한 루틴 수
+    function checksOn(dateKey) {
+      return data.routines.filter(r => isChecked(dateKey, r.id)).length;
+    }
+
+    // 막대 차트 공통 (세로 막대, 0~100%)
+    // items: [{ label, value(0~100 또는 null=아직 아님), tip, mark(강조), showValue }]
+    function renderColumnChart(box, items, { compact = false } = {}) {
+      box.textContent = "";
+      box.classList.toggle("is-compact", compact);
+      // 눈금선 (0 / 50 / 100%)
+      const grid = document.createElement("div");
+      grid.className = "cc-grid";
+      [100, 50, 0].forEach(v => {
+        const line = document.createElement("div");
+        line.className = "cc-line";
+        line.style.bottom = v + "%";
+        const label = document.createElement("span");
+        label.className = "cc-tick num";
+        label.textContent = v + "%";
+        line.append(label);
+        grid.append(line);
+      });
+      const cols = document.createElement("div");
+      cols.className = "cc-cols";
+      items.forEach(item => {
+        const col = document.createElement("div");
+        col.className = "cc-col" + (item.mark ? " is-mark" : "");
+        const plot = document.createElement("div");
+        plot.className = "cc-plot";
+        if (item.value !== null) {
+          const bar = document.createElement("div");
+          bar.className = "cc-bar";
+          bar.style.height = Math.max(item.value, 0) + "%";
+          if (item.value === 0) bar.classList.add("is-zero");
+          plot.append(bar);
+          if (item.showValue) {
+            const v = document.createElement("span");
+            v.className = "cc-value num";
+            v.style.bottom = `calc(${item.value}% + 4px)`;
+            v.textContent = Math.round(item.value) + "%";
+            plot.append(v);
+          }
+          // 마우스를 올리거나 Tab으로 오면 자세한 값
+          plot.tabIndex = 0;
+          plot.setAttribute("role", "img");
+          plot.setAttribute("aria-label", item.tip);
+          plot.addEventListener("pointerenter", () => showChartTip(plot, item.tip));
+          plot.addEventListener("pointerleave", hideChartTip);
+          plot.addEventListener("focus", () => showChartTip(plot, item.tip));
+          plot.addEventListener("blur", hideChartTip);
+        }
+        const label = document.createElement("span");
+        label.className = "cc-label num";
+        label.textContent = item.label;
+        col.append(plot, label);
+        cols.append(col);
+      });
+      box.append(grid, cols);
+    }
+
+    // 차트 말풍선
+    function showChartTip(target, text) {
+      const tip = el.chartTip;
+      tip.textContent = text;
+      tip.hidden = false;
+      const r = target.getBoundingClientRect();
+      const w = tip.offsetWidth;
+      const left = Math.min(window.innerWidth - w - 8, Math.max(8, r.left + r.width / 2 - w / 2));
+      tip.style.left = left + "px";
+      tip.style.top = Math.max(8, r.top - tip.offsetHeight - 8) + "px";
+    }
+    function hideChartTip() { el.chartTip.hidden = true; }
+
+    function renderRoutine() {
+      if (currentView !== "routine") return;
+      const info = monthInfo();
+      const { y, m, days, keys, todayKey, elapsed } = info;
+      const routines = data.routines;
+      el.rtMonthLabel.textContent = `${y}년 ${m + 1}월`;
+      const isThisMonth = y === new Date().getFullYear() && m === new Date().getMonth();
+      el.rtThisMonth.setAttribute("aria-pressed", String(isThisMonth));
+
+      el.rtEmpty.hidden = routines.length > 0;
+      el.rtContent.hidden = routines.length === 0;
+      if (!routines.length) return;
+
+      // ── 통계 숫자 ──
+      const n = routines.length;
+      const done = keys.reduce((sum, k) => sum + checksOn(k), 0);
+      const total = n * days;
+      const doneSoFar = keys.filter(k => k <= todayKey).reduce((sum, k) => sum + checksOn(k), 0);
+      const rateSoFar = elapsed ? Math.round(doneSoFar / (n * elapsed) * 100) : null;
+      const rateMonth = Math.round(done / total * 100);
+
+      el.rtHeroLabel.textContent = isThisMonth ? "오늘까지 달성률" : (elapsed ? "월 달성률" : "아직 시작 전");
+      el.rtHeroValue.textContent = rateSoFar === null ? "—" : rateSoFar + "%";
+      el.rtMeterFill.style.width = (rateSoFar || 0) + "%";
+      el.rtMeter.setAttribute("aria-valuenow", String(rateSoFar || 0));
+      el.rtHeroSub.textContent = `이번 달 전체(${days}일) 기준 ${rateMonth}%`;
+      el.rtDone.textContent = done.toLocaleString();
+      el.rtLeft.textContent = (total - done).toLocaleString();
+      if (isThisMonth) {
+        el.rtToday.textContent = `${checksOn(todayKey)}/${n}`;
+        el.rtTodayTile.hidden = false;
+      } else {
+        el.rtTodayTile.hidden = true;
+      }
+
+      // ── 주별 달성률 (1주 = 1~7일, 2주 = 8~14일 …) ──
+      const weeks = [];
+      for (let start = 0; start < days; start += 7) {
+        const wk = keys.slice(start, start + 7);
+        const past = wk.filter(k => k <= todayKey);
+        const checks = past.reduce((sum, k) => sum + checksOn(k), 0);
+        const value = past.length ? checks / (n * past.length) * 100 : null;
+        const no = weeks.length + 1;
+        weeks.push({
+          label: `${no}주`,
+          value,
+          showValue: true,
+          mark: wk.includes(todayKey),
+          tip: value === null ? `${no}주: 아직 지나지 않음`
+            : `${no}주 (${start + 1}~${start + wk.length}일): ${Math.round(value)}% · ${checks}/${n * past.length}회`
+        });
+      }
+      renderColumnChart(el.rtWeekChart, weeks);
+
+      // ── 일일 달성률 ──
+      renderColumnChart(el.rtDayChart, keys.map((k, i) => {
+        const date = fromDateKey(k);
+        const c = checksOn(k);
+        const value = k <= todayKey ? c / n * 100 : null;
+        const day = i + 1;
+        return {
+          // 날짜 글자는 1·5·10·15·20·25·30일과 오늘만 (모두 쓰면 겹침, 나머지는 말풍선으로)
+          label: day === 1 || day % 5 === 0 || k === todayKey ? String(day) : "",
+          value,
+          mark: k === todayKey,
+          tip: value === null ? `${m + 1}/${i + 1}(${DAY_NAMES[date.getDay()]}): 아직 아님`
+            : `${m + 1}/${i + 1}(${DAY_NAMES[date.getDay()]}): ${Math.round(value)}% · ${c}/${n}개`
+        };
+      }), { compact: true });
+
+      renderRoutineGrid(info);
+      renderRoutineAnalysis(info);
+    }
+
+    // ── 체크 표: 머리글 3줄(주 / 요일 / 날짜) + 루틴마다 한 줄 ──
+    function renderRoutineGrid({ y, m, days, keys, todayKey }) {
+      const table = el.rtGrid;
+      table.textContent = "";
+      const thead = document.createElement("thead");
+      const rowWeek = document.createElement("tr");
+      const rowDay = document.createElement("tr");
+      const rowDate = document.createElement("tr");
+
+      const corner = document.createElement("th");
+      corner.className = "rt-name-col";
+      corner.rowSpan = 3;
+      corner.scope = "col";
+      corner.textContent = "루틴";
+      rowWeek.append(corner);
+
+      for (let start = 0; start < days; start += 7) {
+        const th = document.createElement("th");
+        th.colSpan = Math.min(7, days - start);
+        th.className = "rt-week";
+        th.textContent = `Week ${start / 7 + 1}`;
+        rowWeek.append(th);
+      }
+      keys.forEach((k, i) => {
+        const date = fromDateKey(k);
+        const cls = "rt-day" + weekendClass(date) + (k === todayKey ? " is-today" : "") + (i % 7 === 0 ? " week-start" : "");
+        const d1 = document.createElement("th");
+        d1.className = cls;
+        d1.textContent = DAY_NAMES[date.getDay()];
+        const d2 = document.createElement("th");
+        d2.className = cls + " num";
+        d2.textContent = String(i + 1);
+        const holiday = getHoliday(k);
+        if (holiday) d2.title = holiday.name;
+        rowDay.append(d1);
+        rowDate.append(d2);
+      });
+      thead.append(rowWeek, rowDay, rowDate);
+
+      const tbody = document.createElement("tbody");
+      data.routines.forEach(routine => {
+        const tr = document.createElement("tr");
+        const name = document.createElement("th");
+        name.scope = "row";
+        name.className = "rt-name-col";
+        name.textContent = routine.name;
+        name.title = routine.name;
+        tr.append(name);
+        keys.forEach((k, i) => {
+          const td = document.createElement("td");
+          td.className = (k === todayKey ? "is-today" : "") + (i % 7 === 0 ? " week-start" : "");
+          const box = document.createElement("input");
+          box.type = "checkbox";
+          box.className = "check rt-check";
+          box.checked = isChecked(k, routine.id);
+          box.disabled = k > todayKey;   // 아직 오지 않은 날은 체크할 수 없음
+          box.setAttribute("aria-label", `${routine.name} ${m + 1}월 ${i + 1}일`);
+          box.dataset.cell = `${i}|${routine.id}`;
+          box.addEventListener("change", () => {
+            const key = checkKey(k, routine.id);
+            if (box.checked) data.routineChecks[key] = true;
+            else delete data.routineChecks[key];
+            saveData();
+            routineScrollTo = false;
+            renderRoutine();
+            renderGlance();
+            // 다시 그린 뒤 같은 칸에 포커스 (키보드로 이어서 체크할 수 있게)
+            const again = el.rtGrid.querySelector(`input[data-cell="${i}|${routine.id}"]`);
+            if (again) again.focus({ preventScroll: true });
+          });
+          td.append(box);
+          tr.append(td);
+        });
+        tbody.append(tr);
+      });
+      table.append(thead, tbody);
+
+      // 달을 바꿨을 때만 오늘 칸이 보이게 스크롤
+      if (routineScrollTo) {
+        routineScrollTo = false;
+        const todayCell = table.querySelector("th.rt-day.is-today");
+        if (todayCell) {
+          const wrap = el.rtGridWrap;
+          const nameWidth = table.querySelector(".rt-name-col").offsetWidth;
+          wrap.scrollLeft = Math.max(0, todayCell.offsetLeft - nameWidth - wrap.clientWidth / 2 + todayCell.offsetWidth * 4);
+        }
+      }
+    }
+
+    // ── 분석 표: 루틴별 목표 / 실제 / 남음 / 진행률 ──
+    function renderRoutineAnalysis({ days, keys }) {
+      const tbody = el.rtAnalysisBody;
+      tbody.textContent = "";
+      el.rtAnalysisGoal.textContent = `목표(${days}일)`;
+      data.routines.forEach(routine => {
+        const actual = keys.filter(k => isChecked(k, routine.id)).length;
+        const pct = Math.round(actual / days * 100);
+        const tr = document.createElement("tr");
+        const name = document.createElement("th");
+        name.scope = "row";
+        name.textContent = routine.name;
+        const cells = [days, actual, days - actual].map(v => {
+          const td = document.createElement("td");
+          td.className = "num";
+          td.textContent = v;
+          return td;
+        });
+        const barTd = document.createElement("td");
+        barTd.className = "rt-bar-cell";
+        const meter = document.createElement("div");
+        meter.className = "rt-row-meter";
+        meter.setAttribute("role", "progressbar");
+        meter.setAttribute("aria-valuemin", "0");
+        meter.setAttribute("aria-valuemax", "100");
+        meter.setAttribute("aria-valuenow", String(pct));
+        meter.setAttribute("aria-label", `${routine.name} 진행률`);
+        const fill = document.createElement("div");
+        fill.style.width = pct + "%";
+        meter.append(fill);
+        const pctText = document.createElement("span");
+        pctText.className = "num";
+        pctText.textContent = pct + "%";
+        barTd.append(meter, pctText);
+        tr.append(name, ...cells, barTd);
+        tbody.append(tr);
+      });
+    }
+
+    // 월 이동
+    function shiftRoutineMonth(step) {
+      const d = new Date(routineMonth.y, routineMonth.m + step, 1);
+      routineMonth = { y: d.getFullYear(), m: d.getMonth() };
+      routineScrollTo = true;
+      renderRoutine();
+    }
+    el.rtPrev.addEventListener("click", () => shiftRoutineMonth(-1));
+    el.rtNext.addEventListener("click", () => shiftRoutineMonth(1));
+    el.rtThisMonth.addEventListener("click", () => {
+      routineMonth = { y: new Date().getFullYear(), m: new Date().getMonth() };
+      routineScrollTo = true;
+      renderRoutine();
+    });
+
+    // ── 루틴 관리 창 (추가 · 이름 바꾸기 · 순서 · 지우기) ──
+    function addRoutineRow(routine) {
+      const row = document.createElement("div");
+      row.className = "edit-row routine-row";
+      row.dataset.id = routine.id;
+      const name = document.createElement("input");
+      name.type = "text";
+      name.className = "input";
+      name.maxLength = 30;
+      name.placeholder = "예: 독서 📖";
+      name.value = routine.name;
+      name.setAttribute("aria-label", "루틴 이름");
+      const up = document.createElement("button");
+      up.type = "button";
+      up.className = "icon-btn";
+      up.textContent = "▲";
+      up.setAttribute("aria-label", "위로");
+      up.addEventListener("click", () => { if (row.previousElementSibling) row.parentNode.insertBefore(row, row.previousElementSibling); });
+      const down = document.createElement("button");
+      down.type = "button";
+      down.className = "icon-btn";
+      down.textContent = "▼";
+      down.setAttribute("aria-label", "아래로");
+      down.addEventListener("click", () => { if (row.nextElementSibling) row.parentNode.insertBefore(row.nextElementSibling, row); });
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "icon-btn";
+      remove.textContent = "×";
+      remove.setAttribute("aria-label", "이 루틴 지우기");
+      remove.addEventListener("click", () => row.remove());
+      row.append(name, up, down, remove);
+      el.rmRows.append(row);
+      return name;
+    }
+    function openRoutineDialog() {
+      el.rmRows.textContent = "";
+      el.rmError.hidden = true;
+      data.routines.forEach(addRoutineRow);
+      if (!data.routines.length) addRoutineRow({ id: makeId(), name: "" });
+      openDialog(el.rmDialog);
+    }
+    el.rmAddRow.addEventListener("click", () => addRoutineRow({ id: makeId(), name: "" }).focus());
+    el.rmForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const next = [];
+      for (const row of el.rmRows.querySelectorAll(".routine-row")) {
+        const name = row.querySelector("input").value.trim();
+        if (!name) continue;   // 빈 줄은 건너뜀
+        next.push({ id: row.dataset.id, name });
+      }
+      // 지운 루틴의 체크 기록도 함께 지움 (기록이 있으면 한 번 확인)
+      const keepIds = new Set(next.map(r => r.id));
+      const removed = data.routines.filter(r => !keepIds.has(r.id));
+      const removedKeys = Object.keys(data.routineChecks).filter(k => !keepIds.has(k.split("|")[1]));
+      if (removed.length && removedKeys.length &&
+          !confirm(`지운 루틴 ${removed.map(r => r.name).join(", ")}의 체크 기록 ${removedKeys.length}개도 함께 지워져요. 저장할까요?`)) {
+        return;
+      }
+      removedKeys.forEach(k => { delete data.routineChecks[k]; });
+      data.routines = next;
+      if (saveData()) showToast("루틴을 저장했어요.");
+      el.rmDialog.close();
+      renderRoutine();
+      renderGlance();
+    });
+    el.rmCancel.addEventListener("click", () => el.rmDialog.close());
+    closeOnBackdrop(el.rmDialog);
+    el.rtManage.addEventListener("click", openRoutineDialog);
+    el.rtAddFirst.addEventListener("click", openRoutineDialog);
+    el.rtSample.addEventListener("click", () => {
+      data.routines = EXAMPLE_ROUTINES.map(name => ({ id: makeId(), name }));
+      if (saveData()) showToast("예시 루틴을 넣었어요. ‘루틴 관리’에서 바꿀 수 있어요.");
+      routineScrollTo = true;
+      renderRoutine();
+      renderGlance();
+    });
+
+    /* ---------------------------------------------------------
+       화면 전환: 대시보드 ↔ 루틴 (기기마다 마지막 화면을 기억, 주소 #routine 으로도 열림)
+       --------------------------------------------------------- */
+    let currentView = "dashboard";
+    function setView(view, remember = true) {
+      currentView = view === "routine" ? "routine" : "dashboard";
+      document.querySelector(".app").classList.toggle("view-routine", currentView === "routine");
+      el.routineView.hidden = currentView !== "routine";
+      el.viewSwitch.querySelectorAll("button").forEach(btn => {
+        btn.setAttribute("aria-pressed", String(btn.dataset.view === currentView));
+      });
+      if (remember) {
+        device.view = currentView;
+        saveDevice();
+        try {
+          history.replaceState(null, "", currentView === "routine" ? "#routine" : location.pathname + location.search);
+        } catch (err) { /* 파일로 열었을 때 등 */ }
+      }
+      hideChartTip();
+      if (currentView === "routine") {
+        routineScrollTo = true;
+        renderRoutine();
+      } else {
+        renderTimeline();
+        scheduleFit();
+      }
+    }
+    el.viewSwitch.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-view]");
+      if (btn) setView(btn.dataset.view);
+    });
+    window.addEventListener("hashchange", () => setView(location.hash === "#routine" ? "routine" : "dashboard", false));
+
     // 모든 영역 다시 그리기 (처음 열 때, 설정 변경·가져오기 후, 날짜가 바뀔 때)
     function renderAll() {
       applyTimelineCollapse();
+      renderRoutine();
       renderTimeline();
       renderDeadlines();
       renderTodos();
@@ -4952,7 +5717,8 @@
     function isSampleOnly(d) {
       const onlySamples = ["events", "tasks", "deadlines", "links"].every(key => d[key].every(item => item.sample));
       const noTodos = Object.values(d.todayTodos).every(list => list.length === 0);
-      return onlySamples && noTodos;
+      const noRoutines = d.routines.length === 0 && Object.keys(d.routineChecks).length === 0;
+      return onlySamples && noTodos && noRoutines;
     }
 
     function linkDevice(uid) {
@@ -5049,6 +5815,8 @@
         deadlines: mergeList(b.deadlines, local.deadlines, remote.deadlines),
         links: mergeList(b.links, local.links, remote.links),
         offDays: mergeList(b.offDays, local.offDays || [], remote.offDays || []),
+        routines: mergeList(b.routines, local.routines || [], remote.routines || []),
+        routineChecks: mergeKeys(b.routineChecks, local.routineChecks || {}, remote.routineChecks || {}),
         todayTodos: mergeKeys(b.todayTodos, local.todayTodos, remote.todayTodos),
         seeded: [...new Set([...local.seeded, ...remote.seeded])]
       });
@@ -5066,7 +5834,7 @@
 
     // 고치는 중인 입력 창(일정·마감·과제·바로가기·설정)이 열려 있는지
     function formDialogOpen() {
-      return [el.evDialog, el.dlDialog, el.tkDialog, el.lkDialog, el.stDialog].some(dialog => dialog.open);
+      return [el.evDialog, el.dlDialog, el.tkDialog, el.lkDialog, el.stDialog, el.rmDialog].some(dialog => dialog.open);
     }
     // 창이 닫히면 미뤄 둔 클라우드 변경을 반영
     function applyHeldCloudChange() {
@@ -5313,7 +6081,7 @@
     let replaceArmed = false;
     function summarize(d) {
       const todoDays = Object.values(d.todayTodos).filter(list => list.length).length;
-      return `일정 ${d.events.length}개 · 과제 ${d.tasks.length}개 · 마감 ${d.deadlines.length}개 · 바로가기 ${d.links.length}개 · 할 일 기록 ${todoDays}일`;
+      return `일정 ${d.events.length}개 · 과제 ${d.tasks.length}개 · 마감 ${d.deadlines.length}개 · 바로가기 ${d.links.length}개 · 할 일 기록 ${todoDays}일 · 루틴 ${d.routines.length}개`;
     }
     function formatDateTime(d) {
       return `${d.getMonth() + 1}/${d.getDate()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
@@ -5400,6 +6168,10 @@
           viewMonday = getDefaultMonday(now);
           mobileDay = defaultDayIndex();
         }
+        const prev = fromDateKey(lastDateKey);
+        if (routineMonth.y === prev.getFullYear() && routineMonth.m === prev.getMonth()) {
+          routineMonth = { y: now.getFullYear(), m: now.getMonth() };
+        }
         lastDateKey = dateKey;
         renderAll();
       } else if (now.getMinutes() !== lastMinute) {
@@ -5410,8 +6182,10 @@
       lastMinute = now.getMinutes();
     }
 
-    // 처음 열었을 때 각 영역 그리기
+    // 처음 열었을 때 각 영역 그리기 (주소가 #routine 이거나 지난번에 루틴 화면이었으면 루틴 화면)
+    currentView = location.hash === "#routine" ? "routine" : device.view;
     renderAll();
+    setView(currentView, false);
     initGoogle();               // 구글 캘린더 연동 (설정에서 켰을 때만 동작)
     initCloud();                // 클라우드 동기화 (Firebase 설정이 있을 때만 동작)
 

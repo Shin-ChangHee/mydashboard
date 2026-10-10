@@ -7,10 +7,11 @@
    - 데이터는 여기서 다루지 않아요. (데이터는 브라우저 저장소와 Firestore가 담당)
    - 보관 내용을 바꿨다면 아래 CACHE 이름의 숫자를 올려 주세요.
    ========================================================= */
-const CACHE = "command-center-v3";
+const CACHE = "command-center-v4";
 const APP_FILES = [
   "./",
   "./index.html",
+  "./config.js",
   "./manifest.webmanifest",
   "./fonts/pretendard/pretendardvariable-dynamic-subset.css",
   "./icons/icon-192.png",
@@ -49,8 +50,9 @@ self.addEventListener("fetch", (event) => {
   // 이 사이트의 파일만 다룸 (구글 로그인, Firestore, 구글 캘린더 요청은 건드리지 않음)
   if (url.origin !== self.location.origin) return;
 
-  // 화면(페이지): 인터넷 먼저 → 3초 안에 안 오거나 실패하면 보관본
-  if (request.mode === "navigate" || url.pathname.endsWith(".html")) {
+  // 화면(페이지)·설정 파일: 인터넷 먼저 → 3초 안에 안 오거나 실패하면 보관본
+  // (config.js를 고치면 다음에 열 때 바로 반영되게)
+  if (request.mode === "navigate" || url.pathname.endsWith(".html") || url.pathname.endsWith("/config.js")) {
     event.respondWith(networkFirst(request));
     return;
   }

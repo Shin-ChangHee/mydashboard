@@ -19,6 +19,8 @@
       - 색: 맨 위 :root 의 --bg, --scoreboard 같은 값을 바꾸면 전체에 반영
       - 타임라인 1시간 높이: --hour-h (큰 화면에서는 자동으로 맞춰짐)
       - 데이터는 브라우저 localStorage 의 "commandCenter.data" 에 저장
+      - 사람마다 다른 설정값(Firebase)은 config.js 파일에 따로 있음
+        (내 대시보드를 따로 만들 때는 config.js만 바꾸면 됨 → MY_DASHBOARD_GUIDE.md)
       - 외부 서버·CDN·외부 폰트를 쓰지 않음 (인터넷 없이 동작, 글꼴은 fonts 폴더에 포함)
         단, 설정에서 "구글 캘린더 연동"을 켠 경우에만 구글 서버와 통신 (GOOGLE_SETUP.md 참고)
         그리고 클라우드 동기화(Firebase)에 로그인한 경우에만 Firebase와 통신 (FIREBASE_SETUP.md 참고)
@@ -44,6 +46,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="커맨드센터">
   <title>업무 커맨드센터</title>
+  <!-- 사람마다 다른 설정값 (Firebase). 내 대시보드를 따로 만들 때는 이 파일만 바꾸면 돼요 -->
+  <script src="config.js"></script>
   <!-- 글꼴: Pretendard (저장소 fonts 폴더에 들어 있음. 외부 서버에서 받지 않음, SIL OFL 라이선스)
        화면에 쓰인 글자 묶음만 골라 받는 방식이라 가볍습니다. -->
   <link rel="stylesheet" href="fonts/pretendard/pretendardvariable-dynamic-subset.css">
@@ -2652,17 +2656,14 @@
        ========================================================= */
     const STORAGE_KEY = "commandCenter.data";
 
-    // Firebase 웹 앱 설정값 (FIREBASE_SETUP.md 4단계에서 복사한 값)
+    // Firebase 웹 앱 설정값: config.js 파일에 있어요 (사람마다 다른 값이라 따로 뺐어요)
     // - 비밀번호가 아니라 공개돼도 되는 값이에요. 데이터는 보안 규칙(firestore.rules)으로 보호합니다.
-    // - null이면 클라우드 동기화 기능이 숨겨지고, 지금처럼 이 브라우저에만 저장합니다.
-    const FIREBASE_CONFIG = {
-      apiKey: "AIzaSyBMIvYxEAjXpMv7zMsHdzYj_aE3_SNCQbI",
-      authDomain: "mydashboard-8ae08.firebaseapp.com",
-      projectId: "mydashboard-8ae08",
-      storageBucket: "mydashboard-8ae08.firebasestorage.app",
-      messagingSenderId: "896073492796",
-      appId: "1:896073492796:web:97aa6fcf11cfed1cb09639"
-    };
+    // - config.js가 없거나 값이 비어 있으면 클라우드 동기화 기능이 숨겨지고, 이 브라우저에만 저장합니다.
+    const FIREBASE_CONFIG = (() => {
+      const c = window.DASHBOARD_CONFIG && window.DASHBOARD_CONFIG.firebase;
+      const filled = (v) => typeof v === "string" && v.trim() !== "" && !/여기에|YOUR_/i.test(v);
+      return c && filled(c.apiKey) && filled(c.projectId) && filled(c.authDomain) && filled(c.appId) ? c : null;
+    })();
 
     // 기기별 설정 (클라우드로 동기화하지 않음)
     // - id: 이 기기 구분용 / cloudOff: 이 기기는 클라우드 안 씀

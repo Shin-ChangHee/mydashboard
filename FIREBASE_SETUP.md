@@ -64,8 +64,8 @@
    > 이 값은 비밀번호가 아니라 "어느 Firebase 프로젝트인지" 알려주는 주소 같은 값이라 공개돼도 괜찮습니다.
    > 데이터는 3단계의 보안 규칙이 지킵니다.
 
-4. 복사한 값을 Claude에게 보내 주거나, `index.html`에서 `const FIREBASE_CONFIG = null;` 의 `null` 자리에
-   `{ apiKey: "...", ... }` 부분을 붙여넣고 저장소에 올립니다.
+4. 복사한 값을 저장소의 **`config.js`** 파일에 넣습니다. `firebase: { ... }` 안의 6개 값을 내 값으로 바꾸고 저장소에 올리면 돼요.
+   (index.html은 고치지 않아도 됩니다. 자세한 방법은 [MY_DASHBOARD_GUIDE.md](MY_DASHBOARD_GUIDE.md) 5단계)
 
 ## 5. 기기마다 로그인하기
 

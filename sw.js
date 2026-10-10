@@ -7,7 +7,7 @@
    - 데이터는 여기서 다루지 않아요. (데이터는 브라우저 저장소와 Firestore가 담당)
    - 보관 내용을 바꿨다면 아래 CACHE 이름의 숫자를 올려 주세요.
    ========================================================= */
-const CACHE = "command-center-v4";
+const CACHE = "command-center-v5";
 const APP_FILES = [
   "./",
   "./index.html",
@@ -52,8 +52,12 @@ self.addEventListener("fetch", (event) => {
 
   // 화면(페이지)·설정 파일: 인터넷 먼저 → 3초 안에 안 오거나 실패하면 보관본
   // (config.js를 고치면 다음에 열 때 바로 반영되게)
-  if (request.mode === "navigate" || url.pathname.endsWith(".html") || url.pathname.endsWith("/config.js")) {
-    event.respondWith(networkFirst(request));
+  if (url.pathname.endsWith("/config.js")) {
+    event.respondWith(networkFirst(request, "./config.js"));
+    return;
+  }
+  if (request.mode === "navigate" || url.pathname.endsWith(".html")) {
+    event.respondWith(networkFirst(request, "./index.html"));
     return;
   }
 
@@ -73,14 +77,15 @@ async function cacheFirst(request) {
   return response;
 }
 
-// 인터넷 먼저 (화면 파일용)
+// 인터넷 먼저 (화면 파일·설정 파일용)
+// - key: 보관할 자리 (화면은 "./index.html", 설정은 "./config.js" — 서로 덮어쓰지 않게 따로)
 // - 정상 응답(200)만 보관 → 404·서버 오류 페이지가 앱 화면으로 저장되지 않게
 // - 느린 인터넷에서 3초가 지나면 보관본을 먼저 보여줌 (보관본이 없으면 계속 기다림)
-async function networkFirst(request) {
+async function networkFirst(request, key) {
   const network = fetch(request).then(response => {
     if (response.ok) {
       const copy = response.clone();
-      caches.open(CACHE).then(cache => cache.put("./index.html", copy));
+      caches.open(CACHE).then(cache => cache.put(key, copy));
     }
     return response;
   });
@@ -88,11 +93,11 @@ async function networkFirst(request) {
   try {
     const first = await Promise.race([network, timeout]);
     if (first && first.ok) return first;
-    const cached = await caches.match("./index.html");
+    const cached = await caches.match(key);
     if (cached) return cached;
     return first || await network;   // 보관본이 없으면 인터넷 응답을 그대로 사용
   } catch (err) {
-    const cached = await caches.match("./index.html");
+    const cached = await caches.match(key);
     if (cached) return cached;
     throw err;
   }

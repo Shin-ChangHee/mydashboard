@@ -5506,6 +5506,7 @@
       el.mlCards.dataset.date = mealDate;
 
       const nowSlot = mealDate === todayKey ? currentMealSlot() : null;
+      el.mlCards.dataset.nowSlot = nowSlot || "";
       el.mlCards.replaceChildren(...MEAL_SLOTS.map(slot => {
         const meal = getMeal(mealDate, slot.key);
         const card = document.createElement("section");
@@ -6632,6 +6633,8 @@
         renderNowLine(now);
         renderGlance();
         checkGoogleTimer();
+        // 식단 화면: 10:30·15:00이 지나면 '지금' 끼니 표시를 옮김
+        if (currentView === "meal" && el.mlCards.dataset.nowSlot !== (mealDate === dateKey ? currentMealSlot(now) : "")) renderMeal();
       }
       lastMinute = now.getMinutes();
     }

@@ -2639,7 +2639,7 @@
       // 카테고리 정리 (한 번만): '개인(운동 등)' → '개인일정', '점심식사'·'저녁식사' 추가
       // (나중에 직접 지우거나 이름을 바꾸면 그대로 둠)
       if (!target.seeded.includes("categories2")) {
-        const personal = target.categories.find(c => c.id === "personal" && c.name === "개인(운동 등)");
+        const personal = target.categories.find(c => c.name === "개인(운동 등)");
         if (personal) personal.name = "개인일정";
         sample.categories.filter(c => c.id === "lunch" || c.id === "dinner").forEach(c => {
           if (!target.categories.some(x => x.id === c.id || x.name === c.name)) target.categories.push({ ...c });
@@ -6694,10 +6694,18 @@
     const MAX_CLOUD_BYTES = 1000000;  // Firestore 문서 하나의 최대 크기(약 1MB)보다 조금 작게
 
     // 클라우드 문서 → 대시보드 데이터 (못 읽으면 null)
+    // - 예전 버전 화면이 올린 내용이면 새 기능 정리(카테고리 이름 변경 등)를 여기서도 똑같이 적용
+    //   → 이 기기에 적용한 정리가 클라우드의 예전 내용으로 덮이지 않게 하고, 정리한 내용을 다시 올림
+    const upgradedRemotes = new WeakSet();
     function parseRemote(docData) {
       try {
         const migrated = migrate(JSON.parse(docData.json));
-        return migrated ? normalizeData(migrated) : null;
+        if (!migrated) return null;
+        const remote = normalizeData(migrated);
+        const before = remote.seeded.length;
+        fillNewSamples(remote);
+        if (remote.seeded.length !== before) upgradedRemotes.add(remote);
+        return remote;
       } catch (err) {
         return null;
       }
@@ -6874,9 +6882,12 @@
         }
         saveBase(remote);
         setCloudStatus("synced");
-        if (JSON.stringify(remote) === JSON.stringify(data)) return;  // 이미 같은 내용
-        replaceData(remote);
-        if (snap.data().device !== device.id) showToast("다른 기기에서 바뀐 내용을 가져왔어요.");
+        if (JSON.stringify(remote) !== JSON.stringify(data)) {   // 다르면 클라우드 내용으로
+          replaceData(remote);
+          if (snap.data().device !== device.id) showToast("다른 기기에서 바뀐 내용을 가져왔어요.");
+        }
+        // 클라우드 내용이 예전 버전이라 정리했으면 정리한 내용을 올림
+        if (upgradedRemotes.has(remote)) { markUnsynced(true); scheduleCloudSave(); }
     }
 
     function stopCloudListener() {

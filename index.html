@@ -1520,6 +1520,7 @@
     .ml-date-label.is-sun, .ml-date-label.is-holiday { color: var(--danger); }
     #mlToday[aria-pressed="true"] { background: var(--line); }
     .ml-hint { margin: 0; font-size: 13px; color: var(--text-sub); }
+    .ml-holiday { font-size: 13px; font-weight: 600; color: var(--danger); margin-left: 4px; }
 
     /* 아침·점심·저녁 카드 */
     .ml-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
@@ -1589,7 +1590,8 @@
       color: var(--text);
       background: none;
       border: 0;
-      padding: 0;
+      padding: 6px 4px;
+      margin: -6px -4px;
       cursor: pointer;
       white-space: nowrap;
     }
@@ -1613,6 +1615,7 @@
     @media (max-width: 640px) {
       .ml-week th, .ml-week td { padding: 8px 6px; }
       .ml-week .ml-day-col { width: 76px; }
+      .ml-form .input { font-size: 16px; }   /* 아이폰에서 입력할 때 화면이 확대되지 않게 */
     }
   </style>
 </head>
@@ -1761,6 +1764,7 @@
           <span class="ml-date-label num" id="mlDateLabel" aria-live="polite"></span>
           <button type="button" class="btn btn-small" id="mlNext" aria-label="다음 날">▶</button>
           <button type="button" class="btn btn-small" id="mlToday">오늘</button>
+          <span class="ml-holiday" id="mlHoliday" hidden></span>
         </div>
         <p class="ml-hint">먹은 음식을 하나씩 적고 Enter. 쉼표(,)로 여러 개를 한 번에 넣을 수 있어요.</p>
       </div>
@@ -2393,6 +2397,12 @@
       return getMonday(today);
     }
 
+    // 글자 수 자르기 (이모지가 반쪽으로 잘리지 않게 글자 단위로)
+    function cutText(text, max = 40) {
+      const chars = [...text];
+      return chars.length > max ? chars.slice(0, max).join("") : text;
+    }
+
     // 겹치지 않는 고유 번호 만들기 (일정·과제 등의 id)
     function makeId() {
       return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -2558,6 +2568,7 @@
       const base = createSampleData();
       const isTime = (t) => typeof t === "string" && /^([01]\d|2[0-4]):[0-5]\d$/.test(t);
       const isDate = (d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d);
+      const isRealDate = (d) => isDate(d) && toDateKey(fromDateKey(d)) === d;   // 2026-13-45 같은 날짜는 버림
 
       const result = {
         version: CURRENT_VERSION,
@@ -2660,10 +2671,10 @@
           const src = raw.meals && typeof raw.meals === "object" ? raw.meals : {};
           Object.keys(src).forEach(key => {
             const v = src[key];
-            if (!/^\d{4}-\d{2}-\d{2}\|(breakfast|lunch|dinner)$/.test(key) || !v || typeof v !== "object") return;
+            if (!/^\d{4}-\d{2}-\d{2}\|(breakfast|lunch|dinner)$/.test(key) || !isRealDate(key.slice(0, 10)) || !v || typeof v !== "object") return;
             const items = [...new Set((Array.isArray(v.items) ? v.items : [])
               .filter(x => typeof x === "string")
-              .map(x => x.trim().slice(0, 40))
+              .map(x => cutText(x.trim()))
               .filter(Boolean))].slice(0, 20);
             if (items.length) out[key] = { items, skipped: false };
             else if (v.skipped === true) out[key] = { items: [], skipped: true };
@@ -2879,6 +2890,7 @@
       mlNext: document.getElementById("mlNext"),
       mlToday: document.getElementById("mlToday"),
       mlDateLabel: document.getElementById("mlDateLabel"),
+      mlHoliday: document.getElementById("mlHoliday"),
       mlCards: document.getElementById("mlCards"),
       mlWeek: document.getElementById("mlWeek"),
       mlWeekTitle: document.getElementById("mlWeekTitle"),
@@ -4989,7 +5001,7 @@
 
           const p = pendingImport;
           el.bkPreview.textContent =
-            `일정 ${p.events.length}개 · 과제 ${p.tasks.length}개 · 마감 ${p.deadlines.length}개 · 바로가기 ${p.links.length}개가 들어 있어요. ` +
+            `${summarize(p)}가 들어 있어요. ` +
             "가져오면 지금 데이터가 이 파일 내용으로 바뀌어요.";
           el.bkPreview.hidden = false;
           el.bkApply.hidden = false;
@@ -5431,6 +5443,7 @@
       { key: "dinner", label: "저녁", until: 24 * 60 }
     ];
     const mealKey = (dateKey, slot) => `${dateKey}|${slot}`;
+    const MEAL_NAME_MAX = 40;
     let mealDate = toDateKey(new Date());   // 식단 화면에서 보고 있는 날짜
 
     // 지금 시각에 해당하는 끼니
@@ -5457,10 +5470,12 @@
     // "현미밥, 된장국" → ["현미밥", "된장국"]
     function addMealItems(slot, text) {
       const meal = getMeal(mealDate, slot);
-      const names = text.split(/[,，、]/).map(x => x.trim().slice(0, 40)).filter(Boolean);
+      const names = text.split(/[,，、]/).map(x => x.trim()).filter(Boolean);
+      if (!names.length) return true;   // 쉼표만 적었으면 아무것도 바꾸지 않음
+      const tooLong = names.some(x => [...x].length > MEAL_NAME_MAX);
       const items = [...meal.items];
       let dup = 0;
-      names.forEach(name => {
+      names.map(x => cutText(x, MEAL_NAME_MAX)).forEach(name => {
         if (items.includes(name)) dup++;
         else items.push(name);
       });
@@ -5469,6 +5484,7 @@
         return false;
       }
       if (dup && items.length === meal.items.length) showToast("이미 적은 음식이에요.");
+      else if (tooLong) showToast(`음식 이름은 ${MEAL_NAME_MAX}자까지만 저장돼요.`);
       setMeal(mealDate, slot, { items, skipped: false });
       return true;
     }
@@ -5491,19 +5507,24 @@
       const holiday = getHoliday(mealDate);
 
       // 날짜 표시
-      el.mlDateLabel.textContent = `${date.getMonth() + 1}월 ${date.getDate()}일 (${DAY_NAMES[date.getDay()]})` +
-        (date.getFullYear() !== new Date().getFullYear() ? ` ${date.getFullYear()}` : "");
+      el.mlDateLabel.textContent = (date.getFullYear() !== new Date().getFullYear() ? `${date.getFullYear()}년 ` : "") +
+        `${date.getMonth() + 1}월 ${date.getDate()}일 (${DAY_NAMES[date.getDay()]})`;
       el.mlDateLabel.className = "ml-date-label num" + weekendClass(date);
-      el.mlDateLabel.title = holiday ? holiday.name : "";
+      el.mlHoliday.textContent = holiday ? holiday.name : "";
+      el.mlHoliday.hidden = !holiday;
       el.mlToday.setAttribute("aria-pressed", String(mealDate === todayKey));
 
       // 다시 그려도 적던 글자와 커서 위치는 그대로 (클라우드에서 바뀐 내용이 들어올 때 등)
       const typed = {};
       el.mlCards.querySelectorAll("input[data-slot]").forEach(input => { typed[input.dataset.slot] = input.value; });
-      const focused = document.activeElement && el.mlCards.contains(document.activeElement)
-        ? document.activeElement.dataset.slot : null;
-      const sameDate = el.mlCards.dataset.date === mealDate;
-      el.mlCards.dataset.date = mealDate;
+      // 다시 그린 뒤 같은 칸에 키보드 포커스를 돌려놓기 위해 기억
+      const active = document.activeElement;
+      let focusSel = null;
+      if (active && el.mealView.contains(active)) {
+        if (active.matches("input[data-slot]")) focusSel = `input[data-slot="${active.dataset.slot}"]`;
+        else if (active.dataset.skip) focusSel = `.ml-skip-btn[data-skip="${active.dataset.skip}"]`;
+        else if (active.dataset.day) focusSel = `.ml-day-btn[data-day="${active.dataset.day}"]`;
+      }
 
       const nowSlot = mealDate === todayKey ? currentMealSlot() : null;
       el.mlCards.dataset.nowSlot = nowSlot || "";
@@ -5535,6 +5556,7 @@
           skip.type = "button";
           skip.className = "btn btn-small btn-quiet ml-skip-btn";
           skip.textContent = "안 먹음";
+          skip.dataset.skip = slot.key;
           skip.setAttribute("aria-pressed", String(meal.skipped));
           skip.setAttribute("aria-label", `${slot.label} 안 먹음 ${meal.skipped ? "취소" : "표시"}`);
           skip.addEventListener("click", () => setMeal(mealDate, slot.key, { items: [], skipped: !meal.skipped }));
@@ -5582,7 +5604,7 @@
         input.dataset.slot = slot.key;
         input.placeholder = slot.key === "breakfast" ? "예: 현미밥, 계란말이" : slot.key === "lunch" ? "예: 김치찌개" : "예: 닭가슴살 샐러드";
         input.setAttribute("aria-label", `${slot.label}에 먹은 음식`);
-        if (sameDate && typed[slot.key]) input.value = typed[slot.key];
+        if (typed[slot.key]) input.value = typed[slot.key];
         const add = document.createElement("button");
         add.type = "submit";
         add.className = "btn";
@@ -5601,13 +5623,12 @@
         card.append(head, meal.items.length ? list : empty, form);
         return card;
       }));
-      if (focused) {
-        const input = el.mlCards.querySelector(`input[data-slot="${focused}"]`);
-        if (input) input.focus();
-      }
-
       renderMealWeek(todayKey);
       renderFoodList();
+      if (focusSel) {
+        const target = el.mealView.querySelector(focusSel);
+        if (target) target.focus();
+      }
     }
 
     // 고른 날짜가 들어 있는 주(월~일) 식단표
@@ -5645,14 +5666,16 @@
         btn.type = "button";
         btn.className = "ml-day-btn num" + weekendClass(date);
         btn.textContent = `${date.getMonth() + 1}/${date.getDate()} (${DAY_NAMES[date.getDay()]})`;
-        const holiday = getHoliday(dateKey);
-        if (holiday) btn.title = holiday.name;
+        btn.dataset.day = dateKey;
         if (dateKey === mealDate) btn.setAttribute("aria-current", "date");
         th.append(btn);
-        if (dateKey === todayKey) {
+        // 아래 작은 글씨: 오늘 · 공휴일 이름
+        const holiday = getHoliday(dateKey);
+        const marks = [dateKey === todayKey ? "오늘" : "", holiday ? holiday.name : ""].filter(Boolean);
+        if (marks.length) {
           const mark = document.createElement("span");
           mark.className = "ml-today-mark";
-          mark.textContent = "오늘";
+          mark.textContent = marks.join(" · ");
           th.append(mark);
         }
         tr.append(th);
@@ -5708,7 +5731,8 @@
         device.view = currentView;
         saveDevice();
         try {
-          history.replaceState(null, "", currentView === "dashboard" ? location.pathname + location.search : "#" + currentView);
+          const url = currentView === "dashboard" ? location.pathname + location.search : "#" + currentView;
+          if ((viewFromHash() || "dashboard") !== currentView) history.pushState(null, "", url);
         } catch (err) { /* 파일로 열었을 때 등 */ }
       }
       hideChartTip();
@@ -5726,7 +5750,16 @@
       const btn = e.target.closest("button[data-view]");
       if (btn) setView(btn.dataset.view);
     });
-    window.addEventListener("hashchange", () => setView(viewFromHash() || "dashboard", false));
+    // 뒤로·앞으로 가기, 주소 직접 바꾸기 → 그 화면으로 (기기 기억도 함께)
+    const followHash = () => {
+      const view = viewFromHash() || "dashboard";
+      if (view === currentView) return;
+      setView(view, false);
+      device.view = currentView;
+      saveDevice();
+    };
+    window.addEventListener("hashchange", followHash);
+    window.addEventListener("popstate", followHash);
 
     // 모든 영역 다시 그리기 (처음 열 때, 설정 변경·가져오기 후, 날짜가 바뀔 때)
     function renderAll() {
@@ -6258,6 +6291,23 @@
         return out;
       };
 
+      // 식단: 끼니 안의 음식을 하나씩 합치기
+      // - 양쪽에서 추가한 음식은 모두 남김, 한쪽에서 지운 음식(기준점에 있던 것)은 지움
+      // - 음식이 하나라도 있으면 '안 먹음'보다 음식이 우선
+      const mergeMeals = (bObj, lObj, rObj) => {
+        const out = {};
+        new Set([...Object.keys(lObj), ...Object.keys(rObj)]).forEach(key => {
+          const bv = bObj[key], lv = lObj[key], rv = rObj[key];
+          if (same(lv, rv)) { if (lv) out[key] = lv; return; }
+          const B = new Set(bv ? bv.items : []), L = lv ? lv.items : [], R = rv ? rv.items : [];
+          const items = [...new Set([...L, ...R])].filter(x => !(B.has(x) && (!L.includes(x) || !R.includes(x))));
+          const skipped = pick(!!(bv && bv.skipped), !!(lv && lv.skipped), !!(rv && rv.skipped));
+          if (items.length) out[key] = { items, skipped: false };
+          else if (skipped) out[key] = { items: [], skipped: true };
+        });
+        return out;
+      };
+
       const categories = mergeList(b.categories, local.categories, remote.categories);
       return normalizeData({
         version: CURRENT_VERSION,
@@ -6270,7 +6320,7 @@
         offDays: mergeList(b.offDays, local.offDays || [], remote.offDays || []),
         routines: mergeList(b.routines, local.routines || [], remote.routines || []),
         routineChecks: mergeKeys(b.routineChecks, local.routineChecks || {}, remote.routineChecks || {}),
-        meals: mergeKeys(b.meals, local.meals || {}, remote.meals || {}),
+        meals: mergeMeals(b.meals || {}, local.meals || {}, remote.meals || {}),
         todayTodos: mergeKeys(b.todayTodos, local.todayTodos, remote.todayTodos),
         seeded: [...new Set([...local.seeded, ...remote.seeded])]
       });

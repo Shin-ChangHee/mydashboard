@@ -6288,6 +6288,8 @@
          보고 있는 주의 일정을 가져와 타임라인에 함께 보여줍니다.
        - 구글 일정은 브라우저에 저장하지 않고 화면에만 보여줍니다.
        - 로그인 열쇠(토큰)는 1시간 동안만 유효해서, 시간이 지나면 버튼을 다시 눌러야 해요.
+       - 새로고침해도 다시 누르지 않도록, 유효한 동안만 이 기기에 열쇠를 보관해요.
+         (시간이 끝나거나 '연결 끊기'·설정에서 끄면 바로 지움. 캘린더 읽기 권한만 있는 열쇠예요)
        - 설정 방법은 저장소의 GOOGLE_SETUP.md 를 보세요.
        ========================================================= */
     const GOOGLE_SCRIPT = "https://accounts.google.com/gsi/client";
@@ -6308,6 +6310,28 @@
       loadingWeeks: {},     // 지금 가져오는 중인 주
       lastSync: null        // 마지막으로 가져온 시각
     };
+
+    // 로그인 열쇠를 이 기기에 잠깐 보관 (새로고침해도 연결 유지, 끝나는 시각이 지나면 버림)
+    const GOOGLE_TOKEN_KEY = "commandCenter.googleToken";
+    function saveGoogleToken() {
+      try {
+        localStorage.setItem(GOOGLE_TOKEN_KEY, JSON.stringify({
+          token: gcal.token, expires: gcal.tokenExpires, clientId: data.settings.googleClientId.trim()
+        }));
+      } catch (err) { /* 저장소를 못 쓰면 이번 화면에서만 유지 */ }
+    }
+    function clearGoogleToken() {
+      try { localStorage.removeItem(GOOGLE_TOKEN_KEY); } catch (err) { /* 넘어감 */ }
+    }
+    function loadGoogleToken() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(GOOGLE_TOKEN_KEY));
+        if (saved && typeof saved.token === "string" && saved.token && Number(saved.expires) > Date.now() &&
+            saved.clientId === data.settings.googleClientId.trim()) return saved;
+      } catch (err) { /* 깨졌으면 버림 */ }
+      clearGoogleToken();
+      return null;
+    }
 
     // 구글 연동을 쓸 수 있는 상태인지
     function googleWanted() {
@@ -6340,7 +6364,7 @@
       gcal.weeks = {};
       gcal.tokenClient = null;
 
-      if (!googleWanted()) { setGoogleStatus("off"); return; }
+      if (!googleWanted()) { clearGoogleToken(); setGoogleStatus("off"); return; }
       if (location.protocol === "file:") {
         setGoogleStatus("file", "구글 연동은 웹 주소(https://…)로 열었을 때만 쓸 수 있어요.");
         return;
@@ -6362,6 +6386,15 @@
           }
         });
         setGoogleStatus("ready");
+
+        // 아직 유효한 열쇠가 있으면 (새로고침 등) 바로 연결
+        const saved = loadGoogleToken();
+        if (saved) {
+          gcal.token = saved.token;
+          gcal.tokenExpires = Number(saved.expires);
+          setGoogleStatus("connected");
+          ensureGoogleWeek(viewMonday);
+        }
       } catch (err) {
         setGoogleStatus("error", "구글에 연결할 수 없어요. 인터넷 연결을 확인해 주세요.");
       }
@@ -6427,6 +6460,7 @@
       }
       gcal.token = resp.access_token;
       gcal.tokenExpires = Date.now() + (Number(resp.expires_in) || 3600) * 1000 - 60 * 1000;
+      saveGoogleToken();
       gcal.weeks = {};
       setGoogleStatus("connected");
       ensureGoogleWeek(viewMonday);
@@ -6439,6 +6473,7 @@
       const res = await fetch(url, { headers: { Authorization: `Bearer ${gcal.token}` } });
       if (res.status === 401) {
         gcal.token = null;
+        clearGoogleToken();
         throw new Error("expired");
       }
       if (!res.ok) throw new Error(`http ${res.status}`);
@@ -6451,6 +6486,7 @@
       if (gcal.status !== "connected" || gcal.weeks[weekKey] || gcal.loadingWeeks[weekKey]) return;
       if (Date.now() > gcal.tokenExpires) {
         gcal.token = null;
+        clearGoogleToken();
         setGoogleStatus("expired");
         return;
       }
@@ -6567,6 +6603,7 @@
     el.stGoogleDisconnect.addEventListener("click", () => {
       if (gcal.token && window.google) window.google.accounts.oauth2.revoke(gcal.token, () => {});
       gcal.token = null;
+      clearGoogleToken();
       gcal.weeks = {};
       gcal.calendars = null;
       setGoogleStatus(gcal.tokenClient ? "ready" : "off", "구글 연결을 끊었어요.");
@@ -6578,6 +6615,7 @@
       if (gcal.status !== "connected") return;
       if (Date.now() > gcal.tokenExpires) {
         gcal.token = null;
+        clearGoogleToken();
         setGoogleStatus("expired");
         return;
       }

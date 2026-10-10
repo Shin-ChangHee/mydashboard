@@ -436,6 +436,15 @@
       border-color: var(--line);
     }
 
+    /* 접기/펼치기 */
+    .tl-body { display: flex; flex-direction: column; gap: 12px; }
+    .tl-toggle { padding-left: 8px; padding-right: 8px; }
+    .tl-collapsed-info { margin: 0; font-size: 14px; color: var(--text-sub); }
+    /* 접었을 때: 주 이동·구글 버튼은 숨기고(일정 추가는 남김), 영역 높이를 내용만큼만 */
+    .app.tl-collapsed .tl-nav,
+    .app.tl-collapsed .g-controls { display: none; }
+    .app.tl-collapsed { grid-template-rows: auto auto 1fr auto; }  /* 남는 세로 공간은 과제 영역이 받음 */
+
     /* 화면이 아주 좁을 때는 타임라인만 옆으로 스크롤 */
     .tl-scroll {
       overflow-x: auto;
@@ -1285,6 +1294,7 @@
           "tools";
         grid-template-rows: auto minmax(520px, auto) auto auto auto;
       }
+      .app.tl-collapsed { grid-template-rows: auto auto auto 1fr auto; }
       /* 마감과 할 일은 좌우로 나란히 */
       .side {
         grid-template-rows: none;
@@ -1370,6 +1380,8 @@
         <div class="tl-title">
           <h2 id="timelineTitle">이번 주 타임라인</h2>
           <span class="tl-range num" id="tlRange"></span>
+          <!-- 접기/펼치기 (기기마다 따로 기억) -->
+          <button type="button" class="btn btn-small btn-quiet tl-toggle" id="tlToggle" aria-controls="tlBody" aria-expanded="true">접기 ▴</button>
         </div>
         <div class="tl-actions">
           <div class="tl-nav" role="group" aria-label="주 이동">
@@ -1385,13 +1397,18 @@
           </span>
         </div>
       </div>
-      <!-- 일정이 없을 때만 보이는 안내 문구 -->
-      <p class="tl-empty" id="tlEmpty" hidden>이번 주 일정이 없어요. 빈 칸을 눌러 추가하세요.</p>
-      <!-- 타임라인 격자는 JavaScript가 채웁니다 (renderTimeline 함수) -->
-      <!-- 휴대폰 화면에서만: 요일 고르기 (하루씩 보기) -->
-      <div class="tl-daytabs" id="tlDayTabs" role="group" aria-label="요일 고르기" hidden></div>
-      <div class="tl-scroll" id="tlScroll">
-        <div class="tl-grid" id="tlGrid"></div>
+      <!-- 접었을 때만 보이는 요약 한 줄 -->
+      <p class="tl-collapsed-info num" id="tlCollapsedInfo" hidden></p>
+      <!-- 펼쳤을 때 보이는 부분 -->
+      <div class="tl-body" id="tlBody">
+        <!-- 일정이 없을 때만 보이는 안내 문구 -->
+        <p class="tl-empty" id="tlEmpty" hidden>이번 주 일정이 없어요. 빈 칸을 눌러 추가하세요.</p>
+        <!-- 타임라인 격자는 JavaScript가 채웁니다 (renderTimeline 함수) -->
+        <!-- 휴대폰 화면에서만: 요일 고르기 (하루씩 보기) -->
+        <div class="tl-daytabs" id="tlDayTabs" role="group" aria-label="요일 고르기" hidden></div>
+        <div class="tl-scroll" id="tlScroll">
+          <div class="tl-grid" id="tlGrid"></div>
+        </div>
       </div>
     </section>
 
@@ -2055,6 +2072,7 @@
     // - linkedUid: 이 기기가 연결된 계정
     // - unsynced: 이 기기에서 바꿨는데 아직 클라우드에 못 올린 내용이 있음 (창을 닫아도 기억)
     // - lastBackup: 이 기기에서 마지막으로 백업 파일을 내려받은 때
+    // - timelineCollapsed: 이 기기에서 타임라인을 접어 두었는지 (null이면 휴대폰은 접힘, PC는 펼침)
     const DEVICE_KEY = "commandCenter.device";
     const device = (() => {
       let saved = {};
@@ -2064,7 +2082,8 @@
         cloudOff: saved.cloudOff === true,
         linkedUid: saved.linkedUid || null,
         unsynced: saved.unsynced === true || saved.dirty === true,  // dirty는 예전 이름
-        lastBackup: typeof saved.lastBackup === "string" ? saved.lastBackup : null
+        lastBackup: typeof saved.lastBackup === "string" ? saved.lastBackup : null,
+        timelineCollapsed: typeof saved.timelineCollapsed === "boolean" ? saved.timelineCollapsed : null  // null = 기본값
       };
     })();
     function saveDevice() {
@@ -2330,6 +2349,9 @@
       tlThis: document.getElementById("tlThis"),
       tlNext: document.getElementById("tlNext"),
       tlAdd: document.getElementById("tlAdd"),
+      tlToggle: document.getElementById("tlToggle"),
+      tlBody: document.getElementById("tlBody"),
+      tlCollapsedInfo: document.getElementById("tlCollapsedInfo"),
       tlDayTabs: document.getElementById("tlDayTabs"),
       tlScroll: document.getElementById("tlScroll"),
       // 일정 입력 창
@@ -2779,7 +2801,7 @@
     });
 
     // 화면 폭이 휴대폰 ↔ PC 크기로 바뀌면 다시 그리기
-    mobileQuery.addEventListener("change", () => { renderTimeline(); scheduleFit(); });
+    mobileQuery.addEventListener("change", () => { applyTimelineCollapse(); renderTimeline(); scheduleFit(); });
 
     // 특정 날짜에 이 일정이 있는지 확인 (반복 일정 포함)
     function occursOn(event, date) {
@@ -2918,6 +2940,43 @@
           " — 설정에서 타임라인 표시 시간대를 넓히면 모두 보여요.");
       });
       return chip;
+    }
+
+    // ── 타임라인 접기/펼치기 ──
+    function isTimelineCollapsed() {
+      return device.timelineCollapsed === null ? isMobile() : device.timelineCollapsed;
+    }
+    function applyTimelineCollapse() {
+      const collapsed = isTimelineCollapsed();
+      document.querySelector(".app").classList.toggle("tl-collapsed", collapsed);
+      el.tlBody.hidden = collapsed;
+      el.tlCollapsedInfo.hidden = !collapsed;
+      el.tlToggle.setAttribute("aria-expanded", String(!collapsed));
+      el.tlToggle.textContent = collapsed ? "펼치기 ▾" : "접기 ▴";
+      el.tlToggle.title = collapsed ? "이번 주 타임라인 펼치기" : "이번 주 타임라인 접기";
+    }
+    el.tlToggle.addEventListener("click", () => {
+      device.timelineCollapsed = !isTimelineCollapsed();
+      saveDevice();
+      applyTimelineCollapse();
+      renderTimeline();
+      scheduleFit();
+    });
+
+    // 접었을 때 보여줄 요약: "오늘 일정 2개 · 이번 주 9개"
+    function renderCollapsedInfo() {
+      const todayKey = toDateKey(new Date());
+      let weekCount = 0, todayCount = 0, todayInWeek = false;
+      WEEK.forEach(i => {
+        const date = addDays(viewMonday, i);
+        const count = data.events.filter(event => occursOn(event, date)).length +
+          googleTimedItemsFor(date).length + googleAllDayFor(date).length;
+        weekCount += count;
+        if (toDateKey(date) === todayKey) { todayCount = count; todayInWeek = true; }
+      });
+      el.tlCollapsedInfo.textContent = todayInWeek
+        ? `오늘 일정 ${todayCount}개 · 이번 주 ${weekCount}개 — ‘펼치기’를 누르면 타임라인이 보여요.`
+        : `이 주 일정 ${weekCount}개 — ‘펼치기’를 누르면 타임라인이 보여요.`;
     }
 
     // 타임라인 전체 그리기
@@ -3070,6 +3129,7 @@
 
       renderNowLine(today);
       renderGlance();
+      renderCollapsedInfo();
 
       // 구글에 연결돼 있으면 이 주의 구글 일정 가져오기 (이미 있으면 그냥 넘어감)
       if (gcal.status === "connected") ensureGoogleWeek(viewMonday);
@@ -3087,6 +3147,7 @@
 
     function fitTimeline() {
       const root = document.documentElement;
+      if (isTimelineCollapsed()) return;   // 접혀 있으면 맞출 필요 없음
       if (window.innerWidth <= 1366) {
         if (root.style.getPropertyValue("--hour-h")) {
           root.style.removeProperty("--hour-h");
@@ -4454,6 +4515,7 @@
 
     // 모든 영역 다시 그리기 (처음 열 때, 설정 변경·가져오기 후, 날짜가 바뀔 때)
     function renderAll() {
+      applyTimelineCollapse();
       renderTimeline();
       renderDeadlines();
       renderTodos();

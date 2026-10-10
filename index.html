@@ -1309,7 +1309,7 @@
     .rt-month { display: flex; align-items: center; gap: 6px; }
     .rt-month-label { font-size: 16px; font-weight: 600; min-width: 104px; text-align: center; }
     #rtThisMonth[aria-pressed="true"] { background: var(--line); }
-    #rtManage { margin-left: auto; }
+    .rt-head-actions { display: flex; gap: 8px; margin-left: auto; }
     .rt-empty { display: flex; flex-direction: column; gap: 12px; padding: 24px 0; }
     .rt-content { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 
@@ -1508,7 +1508,7 @@
     .app.view-routine .area-tasks { display: none; }
     @media (max-width: 820px) {
       .rt-stats { grid-template-columns: minmax(0, 1fr); }
-      #rtManage { margin-left: 0; }
+      .rt-head-actions { margin-left: 0; }
     }
 
     /* =========================================================
@@ -1520,6 +1520,8 @@
     .ml-date-label.is-sun, .ml-date-label.is-holiday { color: var(--danger); }
     #mlToday[aria-pressed="true"] { background: var(--line); }
     .ml-hint { margin: 0; font-size: 13px; color: var(--text-sub); }
+    .ex-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+    .ex-quick .btn[aria-pressed="true"] { background: var(--line); color: var(--text); }
     .ml-holiday { font-size: 13px; font-weight: 600; color: var(--danger); margin-left: 4px; }
 
     /* 아침·점심·저녁 카드 */
@@ -1767,6 +1769,9 @@
           <span class="ml-holiday" id="mlHoliday" hidden></span>
         </div>
         <p class="ml-hint">먹은 음식을 하나씩 적고 Enter. 쉼표(,)로 여러 개를 한 번에 넣을 수 있어요.</p>
+        <div class="rt-head-actions">
+          <button type="button" class="btn btn-small" id="mlExport">엑셀 내려받기</button>
+        </div>
       </div>
 
       <!-- 아침 · 점심 · 저녁 카드 (자바스크립트로 채움) -->
@@ -1799,7 +1804,10 @@
           <button type="button" class="btn btn-small" id="rtNext" aria-label="다음 달">▶</button>
           <button type="button" class="btn btn-small" id="rtThisMonth">이번 달</button>
         </div>
-        <button type="button" class="btn btn-small" id="rtManage">루틴 관리</button>
+        <div class="rt-head-actions">
+          <button type="button" class="btn btn-small" id="rtExport">엑셀 내려받기</button>
+          <button type="button" class="btn btn-small" id="rtManage">루틴 관리</button>
+        </div>
       </div>
 
       <!-- 루틴이 없을 때 -->
@@ -2280,6 +2288,38 @@
         <span class="spacer"></span>
         <button type="button" class="btn" id="rmCancel">취소</button>
         <button type="submit" class="btn btn-primary">저장</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ===================================================
+       엑셀로 내려받기 창 (루틴·식단 공용)
+       =================================================== -->
+  <dialog class="dialog" id="exportDialog" aria-labelledby="exTitle">
+    <form class="dialog-form" id="exForm" novalidate>
+      <h2 id="exTitle">엑셀로 내려받기</h2>
+      <p class="form-hint" id="exHint"></p>
+      <div class="ex-quick" role="group" aria-label="기간 빠르게 고르기">
+        <button type="button" class="btn btn-small" data-range="all">전체 기록</button>
+        <button type="button" class="btn btn-small" data-range="month">이번 달</button>
+        <button type="button" class="btn btn-small" data-range="30">최근 30일</button>
+      </div>
+      <div class="field-row">
+        <label class="field">
+          <span class="field-label">시작</span>
+          <input class="input num" type="date" id="exFrom" min="2000-01-01" max="2099-12-31">
+        </label>
+        <label class="field">
+          <span class="field-label">끝</span>
+          <input class="input num" type="date" id="exTo" min="2000-01-01" max="2099-12-31">
+        </label>
+      </div>
+      <p class="form-hint" id="exSummary"></p>
+      <p class="form-error" id="exError" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button type="button" class="btn" id="exCancel">취소</button>
+        <button type="submit" class="btn btn-primary">내려받기</button>
       </div>
     </form>
   </dialog>
@@ -2896,6 +2936,17 @@
       mlWeekTitle: document.getElementById("mlWeekTitle"),
       mlWeekCount: document.getElementById("mlWeekCount"),
       mlFoods: document.getElementById("mlFoods"),
+      rtExport: document.getElementById("rtExport"),
+      mlExport: document.getElementById("mlExport"),
+      exDialog: document.getElementById("exportDialog"),
+      exForm: document.getElementById("exForm"),
+      exTitle: document.getElementById("exTitle"),
+      exHint: document.getElementById("exHint"),
+      exFrom: document.getElementById("exFrom"),
+      exTo: document.getElementById("exTo"),
+      exSummary: document.getElementById("exSummary"),
+      exError: document.getElementById("exError"),
+      exCancel: document.getElementById("exCancel"),
       rtPrev: document.getElementById("rtPrev"),
       rtNext: document.getElementById("rtNext"),
       rtThisMonth: document.getElementById("rtThisMonth"),
@@ -5710,6 +5761,396 @@
     el.mlPrev.addEventListener("click", () => shiftMealDate(-1));
     el.mlNext.addEventListener("click", () => shiftMealDate(1));
     el.mlToday.addEventListener("click", () => { mealDate = toDateKey(new Date()); renderMeal(); });
+
+    /* =========================================================
+       13-4. 엑셀로 내려받기 (루틴·식단)
+       - 외부 프로그램 없이 이 화면에서 바로 엑셀 파일(.xlsx)을 만들어요.
+       - 엑셀 파일은 "XML 문서 여러 개를 zip으로 묶은 것"이라서,
+         아래 makeXlsx가 시트 XML을 만들고 makeZip이 하나로 묶어요.
+       ========================================================= */
+
+    // 글자를 XML 안에 넣을 수 있게 바꾸기 (< > & 같은 기호, 엑셀이 못 읽는 제어 문자 제거)
+    function xmlText(text) {
+      return String(text)
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g, "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    // 1 → A, 27 → AA
+    function colName(n) {
+      let name = "";
+      for (; n > 0; n = Math.floor((n - 1) / 26)) name = String.fromCharCode(65 + (n - 1) % 26) + name;
+      return name;
+    }
+
+    // "2026-10-10" → 엑셀 날짜 숫자 (1899-12-30부터 지난 날 수)
+    const excelDate = (dateKey) => {
+      const [y, m, d] = dateKey.split("-").map(Number);
+      return (Date.UTC(y, m - 1, d) - Date.UTC(1899, 11, 30)) / 86400000;
+    };
+
+    // 칸 모양 번호 (아래 styles.xml의 cellXfs 순서)
+    const XS = { normal: 0, head: 1, date: 2, pct: 3, bold: 4, boldPct: 5, center: 6, wrap: 7 };
+    const XLSX_STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="1"><numFmt numFmtId="164" formatCode="yyyy-mm-dd"/></numFmts>
+<fonts count="2"><font><sz val="11"/><name val="맑은 고딕"/><family val="2"/></font><font><b/><sz val="11"/><name val="맑은 고딕"/><family val="2"/></font></fonts>
+<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE8EEF5"/><bgColor indexed="64"/></patternFill></fill></fills>
+<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="8">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>
+<xf numFmtId="9" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
+<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+<xf numFmtId="9" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+</cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`;
+
+    // 시트 하나 → XML
+    // sheet = { name, cols: [너비...], freeze: { rows, cols }, rows: [[칸...]] }
+    // 칸: null(빈칸) / 글자 / 숫자 / { v: 값, s: 모양, date: true }
+    function sheetXml(sheet) {
+      const rowsXml = sheet.rows.map((row, ri) => {
+        const cells = row.map((cell, ci) => {
+          if (cell === null || cell === undefined || cell === "") return "";
+          const c = typeof cell === "object" ? cell : { v: cell };
+          const ref = colName(ci + 1) + (ri + 1);
+          const style = c.date ? XS.date : (c.s || 0);
+          const sAttr = style ? ` s="${style}"` : "";
+          const v = c.date ? excelDate(c.v) : c.v;
+          if (typeof v === "number") return Number.isFinite(v) ? `<c r="${ref}"${sAttr}><v>${v}</v></c>` : "";
+          return `<c r="${ref}"${sAttr} t="inlineStr"><is><t xml:space="preserve">${xmlText(v)}</t></is></c>`;
+        }).join("");
+        return `<row r="${ri + 1}">${cells}</row>`;
+      }).join("");
+
+      const f = sheet.freeze || { rows: 1, cols: 0 };
+      let pane = "";
+      if (f.rows || f.cols) {
+        const active = f.rows && f.cols ? "bottomRight" : f.rows ? "bottomLeft" : "topRight";
+        pane = `<pane${f.cols ? ` xSplit="${f.cols}"` : ""}${f.rows ? ` ySplit="${f.rows}"` : ""} topLeftCell="${colName(f.cols + 1)}${f.rows + 1}" activePane="${active}" state="frozen"/>`;
+      }
+      const cols = (sheet.cols || []).map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join("");
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<sheetViews><sheetView workbookViewId="0">${pane}</sheetView></sheetViews>` +
+        `<sheetFormatPr defaultRowHeight="16.5"/>` +
+        (cols ? `<cols>${cols}</cols>` : "") +
+        `<sheetData>${rowsXml}</sheetData></worksheet>`;
+    }
+
+    // 시트 여러 개 → 엑셀 파일(Blob)
+    function makeXlsx(sheets) {
+      const sheetName = (name) => name.replace(/[\[\]:*?\/\\]/g, " ").slice(0, 31);
+      const files = [
+        ["[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>` +
+          sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("") + `</Types>`],
+        ["_rels/.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
+        ["xl/workbook.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>` +
+          sheets.map((sh, i) => `<sheet name="${xmlText(sheetName(sh.name))}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("") + `</sheets></workbook>`],
+        ["xl/_rels/workbook.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+          sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join("") +
+          `<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
+        ["xl/styles.xml", XLSX_STYLES],
+        ...sheets.map((sh, i) => [`xl/worksheets/sheet${i + 1}.xml`, sheetXml(sh)])
+      ];
+      return new Blob([makeZip(files)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    }
+
+    // 파일 여러 개를 zip 하나로 묶기 (압축 없이 담기만 함)
+    let crcTable = null;
+    function crc32(bytes) {
+      if (!crcTable) {
+        crcTable = new Uint32Array(256);
+        for (let n = 0; n < 256; n++) {
+          let c = n;
+          for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+          crcTable[n] = c >>> 0;
+        }
+      }
+      let crc = 0xFFFFFFFF;
+      for (let i = 0; i < bytes.length; i++) crc = crcTable[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+      return (crc ^ 0xFFFFFFFF) >>> 0;
+    }
+    function makeZip(files) {
+      const enc = new TextEncoder();
+      const now = new Date();
+      const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+      const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+      const parts = [];
+      const central = [];
+      let offset = 0;
+      files.forEach(([name, text]) => {
+        const nameBytes = enc.encode(name);
+        const data = enc.encode(text);
+        const crc = crc32(data);
+        const local = new DataView(new ArrayBuffer(30));
+        local.setUint32(0, 0x04034b50, true);
+        local.setUint16(4, 20, true);
+        local.setUint16(6, 0x0800, true);   // 파일 이름이 UTF-8
+        local.setUint16(8, 0, true);        // 압축 안 함
+        local.setUint16(10, dosTime, true);
+        local.setUint16(12, dosDate, true);
+        local.setUint32(14, crc, true);
+        local.setUint32(18, data.length, true);
+        local.setUint32(22, data.length, true);
+        local.setUint16(26, nameBytes.length, true);
+        local.setUint16(28, 0, true);
+        parts.push(new Uint8Array(local.buffer), nameBytes, data);
+
+        const cd = new DataView(new ArrayBuffer(46));
+        cd.setUint32(0, 0x02014b50, true);
+        cd.setUint16(4, 20, true);
+        cd.setUint16(6, 20, true);
+        cd.setUint16(8, 0x0800, true);
+        cd.setUint16(10, 0, true);
+        cd.setUint16(12, dosTime, true);
+        cd.setUint16(14, dosDate, true);
+        cd.setUint32(16, crc, true);
+        cd.setUint32(20, data.length, true);
+        cd.setUint32(24, data.length, true);
+        cd.setUint16(28, nameBytes.length, true);
+        cd.setUint32(42, offset, true);
+        central.push(new Uint8Array(cd.buffer), nameBytes);
+        offset += 30 + nameBytes.length + data.length;
+      });
+      const cdSize = central.reduce((sum, part) => sum + part.length, 0);
+      const end = new DataView(new ArrayBuffer(22));
+      end.setUint32(0, 0x06054b50, true);
+      end.setUint16(8, files.length, true);
+      end.setUint16(10, files.length, true);
+      end.setUint32(12, cdSize, true);
+      end.setUint32(16, offset, true);
+      return new Blob([...parts, ...central, new Uint8Array(end.buffer)]);
+    }
+
+    // 파일 내려받기
+    function downloadFile(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    // from~to 날짜 목록 (dateKey)
+    function dateRange(from, to) {
+      const list = [];
+      for (let d = fromDateKey(from); toDateKey(d) <= to; d = addDays(d, 1)) list.push(toDateKey(d));
+      return list;
+    }
+    const dayName = (dateKey) => DAY_NAMES[fromDateKey(dateKey).getDay()];
+    const ratio = (a, b) => b ? { v: a / b, s: XS.pct } : null;
+
+    // ── 루틴 엑셀 ──
+    function buildRoutineSheets(from, to) {
+      const todayKey = toDateKey(new Date());
+      const routines = data.routines;
+      const dates = dateRange(from, to);
+      const pastDates = dates.filter(k => k <= todayKey);   // 달성률은 오늘까지만 계산 (미래는 체크할 수 없으니)
+      const checked = (k, r) => data.routineChecks[`${k}|${r.id}`] === true;
+
+      // 1) 체크 기록: 날짜 × 루틴
+      const log = [["날짜", "요일", ...routines.map(r => r.name), "완료", "달성률"].map(v => ({ v, s: XS.head }))];
+      dates.forEach(k => {
+        const done = routines.filter(r => checked(k, r)).length;
+        const holiday = getHoliday(k);
+        log.push([
+          { v: k, date: true },
+          { v: dayName(k) + (holiday ? ` (${holiday.name})` : ""), s: XS.center },
+          ...routines.map(r => checked(k, r) ? { v: "O", s: XS.center } : null),
+          k <= todayKey ? done : null,
+          k <= todayKey ? ratio(done, routines.length) : null
+        ]);
+      });
+      const totalDone = pastDates.reduce((sum, k) => sum + routines.filter(r => checked(k, r)).length, 0);
+      log.push([
+        { v: "합계", s: XS.bold }, null,
+        ...routines.map(r => ({ v: pastDates.filter(k => checked(k, r)).length, s: XS.bold })),
+        { v: totalDone, s: XS.bold },
+        pastDates.length && routines.length ? { v: totalDone / (pastDates.length * routines.length), s: XS.boldPct } : null
+      ]);
+
+      // 2) 루틴별 요약: 완료 일수, 달성률, 가장 길게 이어서 한 날
+      const summary = [["루틴", "대상 일수", "완료", "못 함", "달성률", "최장 연속"].map(v => ({ v, s: XS.head }))];
+      routines.forEach(r => {
+        let run = 0, best = 0;
+        pastDates.forEach(k => { run = checked(k, r) ? run + 1 : 0; best = Math.max(best, run); });
+        const done = pastDates.filter(k => checked(k, r)).length;
+        summary.push([r.name, pastDates.length, done, pastDates.length - done, ratio(done, pastDates.length), `${best}일`]);
+      });
+
+      // 3) 월별 달성률: 달 × 루틴
+      const months = [...new Set(pastDates.map(k => k.slice(0, 7)))];
+      const monthly = [["달", ...routines.map(r => r.name), "전체"].map(v => ({ v, s: XS.head }))];
+      months.forEach(m => {
+        const days = pastDates.filter(k => k.startsWith(m));
+        const row = routines.map(r => ratio(days.filter(k => checked(k, r)).length, days.length));
+        const all = days.reduce((sum, k) => sum + routines.filter(r => checked(k, r)).length, 0);
+        monthly.push([{ v: m, s: XS.center }, ...row, routines.length ? { v: all / (days.length * routines.length), s: XS.boldPct } : null]);
+      });
+
+      const nameCols = routines.map(r => Math.min(24, Math.max(8, [...r.name].length * 1.8)));
+      return [
+        { name: "체크 기록", cols: [12, 14, ...nameCols, 7, 8], freeze: { rows: 1, cols: 2 }, rows: log },
+        { name: "루틴별 요약", cols: [24, 10, 8, 8, 9, 10], freeze: { rows: 1, cols: 1 }, rows: summary },
+        { name: "월별 달성률", cols: [10, ...nameCols, 8], freeze: { rows: 1, cols: 1 }, rows: monthly }
+      ];
+    }
+
+    // ── 식단 엑셀 ──
+    function buildMealSheets(from, to) {
+      const dates = dateRange(from, to);
+      const cellText = (meal) => !meal ? null : meal.items.length ? { v: meal.items.join(", "), s: XS.wrap } : { v: "안 먹음", s: XS.center };
+
+      // 1) 식단 기록: 날짜 × 아침·점심·저녁
+      const log = [["날짜", "요일", ...MEAL_SLOTS.map(slot => slot.label), "기록한 끼니"].map(v => ({ v, s: XS.head }))];
+      const count = new Map();   // 음식 → { 전체, 아침, 점심, 저녁 }
+      const slotStat = Object.fromEntries(MEAL_SLOTS.map(slot => [slot.key, { ate: 0, skipped: 0, none: 0 }]));
+      dates.forEach(k => {
+        const meals = MEAL_SLOTS.map(slot => data.meals[mealKey(k, slot.key)]);
+        meals.forEach((meal, i) => {
+          const stat = slotStat[MEAL_SLOTS[i].key];
+          if (!meal) stat.none++;
+          else if (meal.skipped) stat.skipped++;
+          else stat.ate++;
+          if (meal) meal.items.forEach(name => {
+            const c = count.get(name) || { total: 0, breakfast: 0, lunch: 0, dinner: 0 };
+            c.total++;
+            c[MEAL_SLOTS[i].key]++;
+            count.set(name, c);
+          });
+        });
+        const holiday = getHoliday(k);
+        log.push([
+          { v: k, date: true },
+          { v: dayName(k) + (holiday ? ` (${holiday.name})` : ""), s: XS.center },
+          ...meals.map(cellText),
+          { v: meals.filter(Boolean).length, s: XS.center }
+        ]);
+      });
+
+      // 2) 음식 빈도: 자주 먹은 순서
+      const freq = [["음식", "전체", ...MEAL_SLOTS.map(slot => slot.label)].map(v => ({ v, s: XS.head }))];
+      [...count.entries()]
+        .sort((a, b) => b[1].total - a[1].total || a[0].localeCompare(b[0], "ko"))
+        .forEach(([name, c]) => freq.push([name, c.total, c.breakfast || null, c.lunch || null, c.dinner || null]));
+
+      // 3) 끼니 요약
+      const summary = [["끼니", "먹음", "안 먹음", "기록 없음", "기록률"].map(v => ({ v, s: XS.head }))];
+      MEAL_SLOTS.forEach(slot => {
+        const st = slotStat[slot.key];
+        summary.push([slot.label, st.ate, st.skipped, st.none, ratio(st.ate + st.skipped, dates.length)]);
+      });
+
+      return [
+        { name: "식단 기록", cols: [12, 14, 30, 30, 30, 11], freeze: { rows: 1, cols: 2 }, rows: log },
+        { name: "음식 빈도", cols: [24, 8, 8, 8, 8], freeze: { rows: 1, cols: 1 }, rows: freq },
+        { name: "끼니 요약", cols: [10, 8, 9, 10, 9], freeze: { rows: 1, cols: 1 }, rows: summary }
+      ];
+    }
+
+    // ── 내려받기 창 ──
+    let exportKind = "routine";
+    const EXPORT_MAX_DAYS = 3660;   // 한 번에 10년까지
+
+    // 기록이 있는 첫날 (없으면 이번 달 1일)
+    function firstRecordDate(kind) {
+      const keys = Object.keys(kind === "routine" ? data.routineChecks : data.meals).map(k => k.slice(0, 10)).sort();
+      const todayKey = toDateKey(new Date());
+      return keys.length && keys[0] < todayKey ? keys[0] : todayKey.slice(0, 8) + "01";
+    }
+    function lastRecordDate(kind) {
+      const keys = Object.keys(kind === "routine" ? data.routineChecks : data.meals).map(k => k.slice(0, 10)).sort();
+      const todayKey = toDateKey(new Date());
+      return keys.length && keys[keys.length - 1] > todayKey ? keys[keys.length - 1] : todayKey;
+    }
+
+    function setExportRange(range) {
+      const todayKey = toDateKey(new Date());
+      if (range === "month") { el.exFrom.value = todayKey.slice(0, 8) + "01"; el.exTo.value = todayKey; }
+      else if (range === "30") { el.exFrom.value = toDateKey(addDays(new Date(), -29)); el.exTo.value = todayKey; }
+      else { el.exFrom.value = firstRecordDate(exportKind); el.exTo.value = lastRecordDate(exportKind); }
+      updateExportSummary();
+    }
+
+    function exportRangeError() {
+      const from = el.exFrom.value, to = el.exTo.value;
+      const real = (k) => isDateKey(k) && toDateKey(fromDateKey(k)) === k;
+      if (!real(from) || !real(to)) return DATE_ERROR;
+      if (from > to) return "시작 날짜가 끝 날짜보다 늦어요.";
+      if (dateRange(from, to).length > EXPORT_MAX_DAYS) return "한 번에 10년까지만 내려받을 수 있어요.";
+      return "";
+    }
+
+    function updateExportSummary() {
+      const err = exportRangeError();
+      el.exSummary.textContent = err ? "" : `${dateRange(el.exFrom.value, el.exTo.value).length}일치 · 시트 3개: ` +
+        (exportKind === "routine" ? "체크 기록, 루틴별 요약, 월별 달성률" : "식단 기록, 음식 빈도, 끼니 요약");
+      el.exError.hidden = true;
+      // 빠른 선택 버튼 중 지금 기간과 같은 것 표시
+      el.exForm.querySelectorAll("[data-range]").forEach(btn => btn.setAttribute("aria-pressed", "false"));
+    }
+
+    function openExport(kind) {
+      exportKind = kind;
+      if (kind === "routine" && !data.routines.length) {
+        showToast("먼저 루틴을 추가해 주세요.", true);
+        return;
+      }
+      el.exTitle.textContent = kind === "routine" ? "루틴 기록 엑셀로 내려받기" : "식단 기록 엑셀로 내려받기";
+      el.exHint.textContent = kind === "routine"
+        ? "날짜별 체크 표와 루틴별·월별 달성률을 엑셀 파일(.xlsx)로 저장해요."
+        : "날짜별 아침·점심·저녁 식단과 자주 먹은 음식을 엑셀 파일(.xlsx)로 저장해요.";
+      setExportRange("all");
+      el.exForm.querySelector('[data-range="all"]').setAttribute("aria-pressed", "true");
+      el.exDialog.showModal();
+    }
+
+    el.rtExport.addEventListener("click", () => openExport("routine"));
+    el.mlExport.addEventListener("click", () => openExport("meal"));
+    el.exForm.querySelectorAll("[data-range]").forEach(btn => btn.addEventListener("click", () => {
+      setExportRange(btn.dataset.range);
+      btn.setAttribute("aria-pressed", "true");
+    }));
+    el.exFrom.addEventListener("input", updateExportSummary);
+    el.exTo.addEventListener("input", updateExportSummary);
+    el.exCancel.addEventListener("click", () => el.exDialog.close());
+    closeOnBackdrop(el.exDialog);
+    el.exForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const err = exportRangeError();
+      if (err) {
+        el.exError.textContent = err;
+        el.exError.hidden = false;
+        return;
+      }
+      const from = el.exFrom.value, to = el.exTo.value;
+      try {
+        const sheets = exportKind === "routine" ? buildRoutineSheets(from, to) : buildMealSheets(from, to);
+        const label = exportKind === "routine" ? "routine-log" : "meal-log";   // 한글 파일 이름은 일부 브라우저에서 깨져서 영문으로
+        const blob = makeXlsx(sheets);
+        el.exDialog.close();   // 창을 먼저 닫아야 파일 이름이 제대로 붙음 (창이 열려 있으면 바깥 링크가 잠김)
+        downloadFile(blob, `${label}_${from}_${to}.xlsx`);
+        showToast("엑셀 파일을 내려받았어요.");
+      } catch (err2) {
+        console.error(err2);
+        el.exError.textContent = "엑셀 파일을 만들지 못했어요. 기간을 줄여서 다시 해 보세요.";
+        el.exError.hidden = false;
+      }
+    });
 
     /* ---------------------------------------------------------
        화면 전환: 대시보드 / 루틴 / 식단

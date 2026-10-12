@@ -923,6 +923,9 @@
     .todo-past-nav { display: flex; gap: 2px; }
     .todo-past-list .todo-text { font-size: 14px; }
     .todo-past-item .btn-small { flex-shrink: 0; }
+    /* 할 일 고치기 */
+    .todo-edit { flex: 1; min-width: 0; padding: 5px 8px; margin: 2px 0; }
+    .todo-edit-btn { font-size: 15px; }
 
     /* =========================================================
        8. [E] 진행 중인 과제
@@ -4460,6 +4463,74 @@
       return data.todayTodos[toDateKey(new Date())] || [];
     }
 
+    // ── 할 일 글자 고치기 (✎ 버튼 → 그 자리에서 입력 칸, Enter 저장 · Esc 취소) ──
+    // 고치는 중에 화면이 다시 그려져도(클라우드 반영 등) 적던 글자가 남도록 상태를 따로 기억
+    let todoEditing = null;   // { key: 날짜, index: 순서, orig: 원래 글자, value: 적는 중인 글자 }
+    let todoRendering = false; // 목록을 다시 그리는 중 (이때 입력 칸이 사라지는 건 "다른 곳 클릭"이 아님)
+
+    function isEditingTodo(key, index) {
+      return !!todoEditing && todoEditing.key === key && todoEditing.index === index;
+    }
+
+    function todoEditButton(key, index, todo) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "icon-btn todo-edit-btn";
+      btn.textContent = "✎";
+      btn.dataset.todoEdit = `${key}|${index}`;
+      btn.setAttribute("aria-label", `${todo.text} 고치기`);
+      btn.title = "고치기";
+      btn.addEventListener("click", () => {
+        todoEditing = { key, index, orig: todo.text, value: todo.text };
+        renderTodos();
+      });
+      return btn;
+    }
+
+    function todoEditor(key, index, todo) {
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "input todo-edit";
+      input.maxLength = 60;
+      input.value = todoEditing.value;
+      input.setAttribute("aria-label", "할 일 고치기 (Enter 저장, Esc 취소)");
+      let finished = false;
+      const finish = (save) => {
+        if (finished) return;
+        finished = true;
+        const text = input.value.trim();
+        todoEditing = null;
+        if (save && text && text !== todo.text) {
+          todo.text = text;
+          saveData();
+        }
+        renderTodos();
+        const btn = document.querySelector(`[data-todo-edit="${key}|${index}"]`);
+        if (btn) btn.focus();
+      };
+      input.addEventListener("input", () => { if (todoEditing) todoEditing.value = input.value; });
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); finish(true); }
+        else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); finish(false); }
+      });
+      // 다른 곳을 누르면 저장 (다시 그려지느라 칸이 사라진 경우는 제외)
+      input.addEventListener("blur", () => { if (!todoRendering && input.isConnected) finish(true); });
+      return input;
+    }
+
+    // 다시 그린 뒤 고치는 칸에 커서 돌려놓기 (고치던 할 일이 지워졌거나 바뀌었으면 그만둠)
+    function focusTodoEditor() {
+      if (!todoEditing) return;
+      const list = data.todayTodos[todoEditing.key] || [];
+      const todo = list[todoEditing.index];
+      if (!todo || todo.text !== todoEditing.orig) { todoEditing = null; renderTodos(); return; }
+      const input = document.querySelector(".todo-edit");
+      if (input && document.activeElement !== input) {
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      }
+    }
+
     // 할 일이 적혀 있는 지난 날짜들 (오래된 순)
     function pastTodoKeys() {
       const todayKey = toDateKey(new Date());
@@ -4504,6 +4575,10 @@
       el.todoPastList.replaceChildren(...list.map((todo, i) => {
         const li = document.createElement("li");
         li.className = "todo-past-item" + (todo.done ? " is-done" : "");
+        if (isEditingTodo(key, i)) {
+          li.append(todoEditor(key, i, todo));
+          return li;
+        }
 
         const label = document.createElement("label");
         label.className = "todo-label";
@@ -4521,7 +4596,7 @@
         text.className = "todo-text";
         text.textContent = todo.text;
         label.append(check, text);
-        li.append(label);
+        li.append(label, todoEditButton(key, i, todo));
 
         // 못 끝낸 일 → 오늘 목록으로 옮기기
         if (!todo.done) {
@@ -4567,6 +4642,7 @@
     }
 
     el.todoPastToggle.addEventListener("click", () => {
+      todoEditing = null;
       todoPastOpen = el.todoPastToggle.getAttribute("aria-expanded") !== "true";
       renderTodoPast();
       scheduleFit();
@@ -4577,6 +4653,7 @@
       const shown = keys.includes(todoPastKey) ? todoPastKey : keys[keys.length - 1];
       const index = keys.indexOf(shown) + step;
       if (index < 0 || index >= keys.length) return;
+      todoEditing = null;
       todoPastKey = keys[index];
       renderTodoPast();
       scheduleFit();
@@ -4585,6 +4662,14 @@
     el.todoPastNext.addEventListener("click", () => shiftTodoPast(1));
 
     function renderTodos() {
+      todoRendering = true;
+      try { renderTodoLists(); } finally { todoRendering = false; }
+      focusTodoEditor();
+      renderGlance();
+      scheduleFit();  // 영역 높이가 바뀌었을 수 있으니 타임라인 높이 다시 맞추기
+    }
+
+    function renderTodoLists() {
       const todayKey = toDateKey(new Date());
       const todos = getTodayTodos();
 
@@ -4594,6 +4679,11 @@
       todos.forEach((todo, index) => {
         const li = document.createElement("li");
         li.className = "todo-item" + (todo.done ? " is-done" : "");
+        if (isEditingTodo(todayKey, index)) {
+          li.append(todoEditor(todayKey, index, todo));
+          el.todoList.append(li);
+          return;
+        }
 
         // 체크박스 + 글자를 label로 묶어서 글자를 눌러도 체크되게
         const label = document.createElement("label");
@@ -4625,7 +4715,7 @@
           el.todoInput.focus();
         });
 
-        li.append(label, remove);
+        li.append(label, todoEditButton(todayKey, index, todo), remove);
         el.todoList.append(li);
       });
 
@@ -4638,9 +4728,6 @@
 
       // 지난 날짜의 할 일
       renderTodoPast();
-      renderGlance();
-
-      scheduleFit();  // 영역 높이가 바뀌었을 수 있으니 타임라인 높이 다시 맞추기
     }
 
     // 할 일 추가 (Enter 또는 추가 버튼)

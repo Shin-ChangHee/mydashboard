@@ -869,7 +869,7 @@
       gap: 4px;
     }
     .todo-list:empty { display: none; }
-    .todo-item {
+    .todo-item, .todo-past-item {
       display: flex;
       align-items: center;
       gap: 8px;
@@ -887,7 +887,7 @@
       overflow-wrap: anywhere;
     }
     /* 체크하면 취소선 */
-    .todo-item.is-done .todo-text {
+    .todo-item.is-done .todo-text, .todo-past-item.is-done .todo-text {
       text-decoration: line-through;
       color: var(--text-sub);
     }
@@ -897,6 +897,32 @@
       gap: 8px;
     }
     .todo-form .input { flex: 1; min-width: 0; }
+
+    /* 지난 날짜의 할 일 (펼치면 체크·지우기·오늘로 옮기기) */
+    .todo-past { border-top: 1px solid var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+    .todo-past-head { display: flex; align-items: center; gap: 8px; }
+    .todo-past-toggle {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font: inherit;
+      font-size: 13px;
+      color: var(--text-sub);
+      background: none;
+      border: 0;
+      padding: 4px 0;
+      text-align: left;
+      cursor: pointer;
+    }
+    .todo-past-toggle:hover { color: var(--text); }
+    .todo-past-toggle.has-left #todoRecord b { color: var(--warn); font-weight: 600; }
+    .todo-past-arrow { transition: transform .15s; }
+    .todo-past-toggle[aria-expanded="true"] .todo-past-arrow { transform: rotate(180deg); }
+    .todo-past-nav { display: flex; gap: 2px; }
+    .todo-past-list .todo-text { font-size: 14px; }
+    .todo-past-item .btn-small { flex-shrink: 0; }
 
     /* =========================================================
        8. [E] 진행 중인 과제
@@ -1856,7 +1882,20 @@
                  placeholder="오늘 꼭 끝낼 일" aria-label="할 일 입력">
           <button type="submit" class="btn" id="todoAddBtn">추가</button>
         </form>
-        <p class="form-hint" id="todoRecord" hidden></p>
+        <!-- 지난 날짜의 할 일: 요약을 누르면 펼쳐서 체크·지우기·오늘로 옮기기 -->
+        <div class="todo-past" id="todoPast" hidden>
+          <div class="todo-past-head">
+            <button type="button" class="todo-past-toggle" id="todoPastToggle" aria-expanded="false" aria-controls="todoPastList">
+              <span id="todoRecord"></span>
+              <span class="todo-past-arrow" aria-hidden="true">▾</span>
+            </button>
+            <span class="todo-past-nav" id="todoPastNav">
+              <button type="button" class="icon-btn" id="todoPastPrev" aria-label="더 이전 날 기록">‹</button>
+              <button type="button" class="icon-btn" id="todoPastNext" aria-label="더 최근 날 기록">›</button>
+            </span>
+          </div>
+          <ul class="todo-list todo-past-list" id="todoPastList" hidden></ul>
+        </div>
       </section>
     </div>
 
@@ -3035,6 +3074,12 @@
       todoInput: document.getElementById("todoInput"),
       todoAddBtn: document.getElementById("todoAddBtn"),
       todoRecord: document.getElementById("todoRecord"),
+      todoPast: document.getElementById("todoPast"),
+      todoPastToggle: document.getElementById("todoPastToggle"),
+      todoPastNav: document.getElementById("todoPastNav"),
+      todoPastPrev: document.getElementById("todoPastPrev"),
+      todoPastNext: document.getElementById("todoPastNext"),
+      todoPastList: document.getElementById("todoPastList"),
       // [E] 진행 중인 과제
       taskFilters: document.getElementById("taskFilters"),
       taskAdd: document.getElementById("taskAdd"),
@@ -4415,17 +4460,129 @@
       return data.todayTodos[toDateKey(new Date())] || [];
     }
 
-    // 가장 최근 지난 날짜의 기록 찾기 (예: 어제 2/3 완료)
-    function getLastRecord() {
+    // 할 일이 적혀 있는 지난 날짜들 (오래된 순)
+    function pastTodoKeys() {
       const todayKey = toDateKey(new Date());
-      const pastKeys = Object.keys(data.todayTodos)
+      return Object.keys(data.todayTodos)
         .filter(key => key < todayKey && data.todayTodos[key].length > 0)
         .sort();
-      if (!pastKeys.length) return null;
-      const key = pastKeys[pastKeys.length - 1];
-      const list = data.todayTodos[key];
-      return { key, total: list.length, done: list.filter(t => t.done).length };
     }
+
+    // 지난 날짜 목록: 보고 있는 날짜(null이면 가장 최근), 펼침 여부(null이면 못 끝낸 일이 있을 때 펼침)
+    let todoPastKey = null;
+    let todoPastOpen = null;
+
+    function renderTodoPast() {
+      const keys = pastTodoKeys();
+      el.todoPast.hidden = keys.length === 0;
+      if (!keys.length) return;
+      const key = keys.includes(todoPastKey) ? todoPastKey : keys[keys.length - 1];   // 직접 고른 날이 없으면 가장 최근
+      const index = keys.indexOf(key);
+      const list = data.todayTodos[key];
+      const done = list.filter(t => t.done).length;
+      const left = list.length - done;
+
+      // 요약 한 줄 (예: 지난 기록 10/12 (월): 3개 중 0개 완료 · 남은 일 3개)
+      const d = fromDateKey(key);
+      el.todoRecord.textContent =
+        `지난 기록 ${d.getMonth() + 1}/${d.getDate()} (${DAY_NAMES[d.getDay()]}): ${list.length}개 중 ${done}개 완료`;
+      if (left) {
+        const b = document.createElement("b");
+        b.textContent = ` · 남은 일 ${left}개`;
+        el.todoRecord.append(b);
+      }
+      el.todoPastToggle.classList.toggle("has-left", left > 0);
+
+      const open = todoPastOpen === null ? (left > 0 && index === keys.length - 1) : todoPastOpen;
+      el.todoPastToggle.setAttribute("aria-expanded", String(open));
+      el.todoPastList.hidden = !open;
+      el.todoPastNav.hidden = !open || keys.length < 2;
+      el.todoPastPrev.disabled = index === 0;
+      el.todoPastNext.disabled = index === keys.length - 1;
+
+      const todayFull = getTodayTodos().length >= TODO_LIMIT;
+      el.todoPastList.replaceChildren(...list.map((todo, i) => {
+        const li = document.createElement("li");
+        li.className = "todo-past-item" + (todo.done ? " is-done" : "");
+
+        const label = document.createElement("label");
+        label.className = "todo-label";
+        const check = document.createElement("input");
+        check.type = "checkbox";
+        check.className = "check";
+        check.checked = todo.done;
+        check.addEventListener("change", () => {
+          todo.done = check.checked;
+          todoPastOpen = true;
+          saveData();
+          renderTodos();
+        });
+        const text = document.createElement("span");
+        text.className = "todo-text";
+        text.textContent = todo.text;
+        label.append(check, text);
+        li.append(label);
+
+        // 못 끝낸 일 → 오늘 목록으로 옮기기
+        if (!todo.done) {
+          const move = document.createElement("button");
+          move.type = "button";
+          move.className = "btn btn-small btn-quiet";
+          move.textContent = "오늘로";
+          move.disabled = todayFull;
+          move.title = todayFull ? "오늘 목록이 3개로 꽉 찼어요" : "오늘 할 일로 옮기기";
+          move.setAttribute("aria-label", `${todo.text} 오늘 할 일로 옮기기`);
+          move.addEventListener("click", () => {
+            const todayKey = toDateKey(new Date());
+            if ((data.todayTodos[todayKey] || []).length >= TODO_LIMIT) return;
+            list.splice(i, 1);
+            if (!list.length) delete data.todayTodos[key];
+            if (!data.todayTodos[todayKey]) data.todayTodos[todayKey] = [];
+            data.todayTodos[todayKey].push({ text: todo.text, done: false });
+            todoPastOpen = true;
+            saveData();
+            renderTodos();
+            showToast("오늘 할 일로 옮겼어요.");
+          });
+          li.append(move);
+        }
+
+        // 지우기
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "icon-btn";
+        remove.textContent = "×";
+        remove.setAttribute("aria-label", `${todo.text} 지우기`);
+        remove.addEventListener("click", () => {
+          list.splice(i, 1);
+          if (!list.length) delete data.todayTodos[key];
+          todoPastOpen = true;
+          saveData();
+          renderTodos();
+          if (!el.todoPast.hidden) el.todoPastToggle.focus();
+        });
+        li.append(remove);
+        return li;
+      }));
+    }
+
+    el.todoPastToggle.addEventListener("click", () => {
+      todoPastOpen = el.todoPastToggle.getAttribute("aria-expanded") !== "true";
+      renderTodoPast();
+      scheduleFit();
+    });
+    // 더 이전 / 더 최근 날짜 기록 보기
+    function shiftTodoPast(step) {
+      const keys = pastTodoKeys();
+      const shown = keys.includes(todoPastKey) ? todoPastKey : keys[keys.length - 1];
+      const index = keys.indexOf(shown) + step;
+      if (index < 0 || index >= keys.length) return;
+      todoPastKey = keys[index];
+      renderTodoPast();
+      scheduleFit();
+    }
+    el.todoPastPrev.addEventListener("click", () => shiftTodoPast(-1));
+    el.todoPastNext.addEventListener("click", () => shiftTodoPast(1));
 
     function renderTodos() {
       const todayKey = toDateKey(new Date());
@@ -4479,16 +4636,8 @@
       el.todoInput.placeholder = full ? "오늘은 3개를 다 채웠어요. 하나씩 끝내 봐요." : "오늘 꼭 끝낼 일";
       el.todoEmpty.hidden = todos.length > 0;
 
-      // 지난 기록 한 줄
-      const record = getLastRecord();
-      if (record) {
-        const d = fromDateKey(record.key);
-        el.todoRecord.textContent =
-          `지난 기록 ${d.getMonth() + 1}/${d.getDate()} (${DAY_NAMES[d.getDay()]}): ${record.total}개 중 ${record.done}개 완료`;
-        el.todoRecord.hidden = false;
-      } else {
-        el.todoRecord.hidden = true;
-      }
+      // 지난 날짜의 할 일
+      renderTodoPast();
       renderGlance();
 
       scheduleFit();  // 영역 높이가 바뀌었을 수 있으니 타임라인 높이 다시 맞추기
@@ -7348,6 +7497,8 @@
           routineMonth = { y: now.getFullYear(), m: now.getMonth() };
         }
         if (mealDate === lastDateKey) mealDate = dateKey;   // 어제 식단을 보고 있었다면 오늘로
+        todoPastKey = null;      // 지난 할 일은 다시 가장 최근 날짜(어제)부터
+        todoPastOpen = null;
         lastDateKey = dateKey;
         renderAll();
       } else if (now.getMinutes() !== lastMinute) {
